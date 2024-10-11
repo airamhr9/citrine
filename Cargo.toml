@@ -1,2 +1,2 @@
 [workspace]
-members = ["framework", "sample"]
+members = ["citrine_core", "sample"]

@@ -18,7 +18,7 @@ where
 {
     pub async fn start(self) -> Result<(), ServerError> {
         info!(
-            "Starting application {} v{} (via Framework)",
+            "Starting application {} v{} (via Citrine)",
             self.name, self.version
         );
 
@@ -109,7 +109,7 @@ where
 {
     fn default() -> ApplicationBuilder<T> {
         ApplicationBuilder {
-            name: "Framework Application".to_string(),
+            name: "Citrine Application".to_string(),
             version: "0.0.1".to_string(),
             port: 8080,
             interceptor: None,

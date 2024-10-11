@@ -1,10 +1,8 @@
-use std::any::{Any, TypeId};
-use std::sync::Arc;
 
-use framework::request::Request;
-use framework::response::Response;
-use framework::{self, tokio, Method, RequestError, Router, ServerError, StatusCode};
-use framework::application::ApplicationBuilder;
+use citrine_core::request::Request;
+use citrine_core::response::Response;
+use citrine_core::{self, tokio, Method, RequestError, Router, ServerError, StatusCode};
+use citrine_core::application::ApplicationBuilder;
 
 use log::info;
 use serde::{Deserialize, Serialize};
@@ -16,7 +14,7 @@ extern crate lazy_static;
 async fn main() -> Result<(), ServerError> {
     env_logger::init();
     ApplicationBuilder::<State>::new()
-        .name("Framework sample application")
+        .name("Citrine sample application")
         .version("0.0.1")
         .port(8080)
         .interceptor(|request, response| {
