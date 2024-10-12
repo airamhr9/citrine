@@ -2,7 +2,7 @@
 pub use tokio;
 pub use hyper::{body::Bytes, Method, Uri, StatusCode, header};
 
-pub use error::{ServerError, RequestError};
+pub use error::{ServerError, RequestError, DefaultErrorResponseBody};
 pub use router::{Router, Route};
 
 mod server;

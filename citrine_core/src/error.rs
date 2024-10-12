@@ -80,7 +80,7 @@ pub struct DefaultErrorResponseBody {
 }
 
 impl DefaultErrorResponseBody {
-    pub fn new(status: StatusCode, cause: String) -> Self {
+pub fn new(status: StatusCode, cause: String) -> Self {
         let status_message = if status.canonical_reason().is_some() {
             format!("{} {}", status.as_str(), status.canonical_reason().unwrap())
         } else {

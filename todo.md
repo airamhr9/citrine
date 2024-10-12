@@ -3,19 +3,19 @@
 
 ### Current
 
-- [ ] Add database connection to sample
-
 ### To Do 
 
 #### MVP
 
 - [ ] make deserialization dependant on request Content-Type. Use Accept-Type in request
+- [ ] Improve sample error handling and find all request
 
 #### Design
 
 - [ ] Think of the best way of having request error handling. If either leave it completely to the 
 user or let them override a function pointer to have centralized and customizable handling provided by the framework
 - [ ] Request validation
+- [ ] Async request handlers
 
 #### Future
 
@@ -25,6 +25,7 @@ user or let them override a function pointer to have centralized and customizabl
 
 ### Done
 
+- [x] Add database connection to sample
 - [x] Response interceptor
 - [x] Separate body from json method in response
 - [x] Content-Type in json response

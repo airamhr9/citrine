@@ -240,24 +240,18 @@ mod tests {
     fn router_test() {
         let mut router = InternalRouter::new_stateful(StateTest::default());
         if let Err(e) = router.add_route(Method::GET, "/hello", |state, _| {
-            println!("Hello world");
-            println!("counter: {}", state.counter);
             return Response::new(StatusCode::OK).json("Hello world");
         }) {
             panic!("{}", e)
         }
 
         if let Err(e) = router.add_route(Method::POST, "/hello/other", |state, _| {
-            println!("Hello other");
-            println!("counter: {}", state.counter);
             return Response::new(StatusCode::OK).json("Hello world");
         }) {
             panic!("{}", e)
         }
 
         if let Err(e) = router.add_route(Method::GET, "/hi/other", |state, _| {
-            println!("hi other");
-            println!("counter: {}", state.counter);
             return Response::new(StatusCode::OK).json("Hello world");
         }) {
             panic!("{}", e)
@@ -270,13 +264,13 @@ mod tests {
         }
 
         let uri1 = Uri::from_static("http://domain.com/hello");
-        let req1: Request = Request::new(Method::GET, uri1, "Body jeje".to_string());
+        let req1: Request = Request::new(Method::GET, uri1, "Body".to_string());
         let uri2 = Uri::from_static("http://domain.com/hello/other");
-        let req2: Request = Request::new(Method::POST, uri2, "Body jeje".to_string());
+        let req2: Request = Request::new(Method::POST, uri2, "Body".to_string());
         let uri3 = Uri::from_static("http://domain.com/hi/other");
-        let req3: Request = Request::new(Method::GET, uri3, "Body jeje".to_string());
+        let req3: Request = Request::new(Method::GET, uri3, "Body".to_string());
         let uri4 = Uri::from_static("http://domain.com/hi/other");
-        let req4: Request = Request::new(Method::PUT, uri4, "Body jeje".to_string());
+        let req4: Request = Request::new(Method::PUT, uri4, "Body".to_string());
 
         let _ = router.run(req1);
         let _ = router.run(req2);
