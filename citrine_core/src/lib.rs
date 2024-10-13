@@ -1,4 +1,4 @@
-// export tokio to avoid having to add it as a dependency on the app
+// exports to avoid having to add necessary libraries as dependencies on the app
 pub use tokio;
 pub use hyper::{body::Bytes, Method, Uri, StatusCode, header};
 

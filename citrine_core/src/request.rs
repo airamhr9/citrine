@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
-use hyper::{body::Bytes, Method, Uri};
-use serde::{de::DeserializeOwned, Deserialize};
+use hyper::{Method, Uri};
+use serde::de::DeserializeOwned;
+use validator::Validate;
 
 use crate::error::{ErrorType, RequestError};
 
@@ -37,19 +38,16 @@ impl Request {
     }
 
     //todo make deserialization dependant on request Content-Type. Use Accept-Type in request
-    pub fn get_body<T>(&self, required: bool) -> Result<Option<T>, RequestError>
+    pub fn get_body<T>(&self) -> Result<Option<T>, RequestError>
     where
         T: DeserializeOwned,
     {
         if self.body.is_none() {
-            if required {
-                return Err(RequestError::default(ErrorType::MissingBody));
-            } else {
-                return Ok(None);
-            }
+            return Err(RequestError::default(ErrorType::MissingBody));
         }
 
         let body_res: Result<T, _> = serde_json::from_str(self.body.as_ref().unwrap());
+
         if let Err(e) = body_res {
             return Err(RequestError::with_message(
                 ErrorType::RequestBodyUnreadable,
@@ -58,5 +56,32 @@ impl Request {
         }
 
         Ok(Some(body_res.unwrap()))
+    }
+
+    pub fn get_body_validated<T>(&self) -> Result<Option<T>, RequestError>
+    where
+        T: DeserializeOwned + Validate,
+    {
+        if self.body.is_none() {
+            return Err(RequestError::default(ErrorType::MissingBody));
+        }
+
+        let body_res: Result<T, _> = serde_json::from_str(self.body.as_ref().unwrap());
+
+        if let Err(e) = body_res {
+            return Err(RequestError::with_message(
+                ErrorType::RequestBodyUnreadable,
+                &e.to_string(),
+            ));
+        }
+
+        let body = body_res.unwrap();
+        
+        if let Err(e) = body.validate() {
+            return Err(RequestError::default(ErrorType::FailedValidation(e)))
+        }
+
+
+        Ok(Some(body))
     }
 }

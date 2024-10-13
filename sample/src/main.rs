@@ -3,6 +3,7 @@ use std::sync::Arc;
 use citrine_core::application::ApplicationBuilder;
 use citrine_core::request::Request;
 use citrine_core::response::Response;
+use validator::Validate;
 use citrine_core::{
     self, tokio, DefaultErrorResponseBody, Method, RequestError, Router, ServerError, StatusCode,
 };
@@ -98,16 +99,20 @@ impl Default for State {
  * returned from them, but this will vary based on your choice of persistence.
  * */
 
-#[derive(skytable::Query, skytable::Response, Clone, Serialize, Deserialize)]
+#[derive(skytable::Query, skytable::Response, Clone, Serialize, Deserialize, Validate)]
 pub struct User {
     pub id: String,
+    #[validate(length(min = 1))]
     pub username: String,
+    #[validate(email)]
     pub mail: String,
 }
 
-#[derive(skytable::Query, Deserialize)]
+#[derive(skytable::Query, Deserialize, Validate)]
 pub struct UpdateUser {
+    #[validate(length(min = 1))]
     pub username: String,
+    #[validate(email)]
     pub mail: String,
 }
 
@@ -176,7 +181,7 @@ fn delete_by_id_controller(state: Arc<State>, req: Request) -> Response {
 }
 
 fn create_user_controler(state: Arc<State>, req: Request) -> Response {
-    let read_body_res: Result<Option<User>, RequestError> = req.get_body(true);
+    let read_body_res: Result<Option<User>, RequestError> = req.get_body_validated();
     if let Err(e) = read_body_res {
         return e.to_response();
     }
@@ -195,7 +200,7 @@ fn create_user_controler(state: Arc<State>, req: Request) -> Response {
 }
 
 fn update_user_controler(state: Arc<State>, req: Request) -> Response {
-    let read_body_res: Result<Option<UpdateUser>, RequestError> = req.get_body(true);
+    let read_body_res: Result<Option<UpdateUser>, RequestError> = req.get_body_validated();
     if let Err(e) = read_body_res {
         return e.to_response();
     }

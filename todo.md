@@ -3,6 +3,8 @@
 
 ### Current
 
+- [ ] Request validation
+
 ### To Do 
 
 #### MVP
@@ -14,7 +16,6 @@
 
 - [ ] Think of the best way of having request error handling. If either leave it completely to the 
 user or let them override a function pointer to have centralized and customizable handling provided by the framework
-- [ ] Request validation
 - [ ] Async request handlers
 
 #### Future
