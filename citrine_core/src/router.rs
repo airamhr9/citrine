@@ -33,6 +33,14 @@ where
         };
     }
 
+    pub fn add_router(mut self, nested: Router<T>) -> Self {
+        for route in nested.routes.iter() {
+            self = self.add_route(route.method.clone(), &route.path, route.handler);
+        }
+
+        self
+    }
+
     pub fn base_path(base_path: &str) -> Self {
         return Router {
             base_path: base_path.to_string(),

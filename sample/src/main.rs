@@ -3,10 +3,10 @@ use std::sync::Arc;
 use citrine_core::application::ApplicationBuilder;
 use citrine_core::request::Request;
 use citrine_core::response::Response;
-use validator::Validate;
 use citrine_core::{
     self, tokio, DefaultErrorResponseBody, Method, RequestError, Router, ServerError, StatusCode,
 };
+use validator::Validate;
 
 use log::info;
 use r2d2::PooledConnection;
@@ -35,8 +35,11 @@ async fn main() -> Result<(), ServerError> {
                 response.status,
             )
         })
-        .add_routes(user_router())
-        .add_routes(Router::new().add_route(Method::GET, "", base_path_controller))
+        .add_routes(
+            Router::new()
+                .add_route(Method::GET, "", base_path_controller)
+                .add_router(Router::base_path("/api").add_router(user_router())),
+        )
         .start()
         .await
 }
