@@ -38,7 +38,7 @@ impl Request {
     }
 
     //todo make deserialization dependant on request Content-Type. Use Accept-Type in request
-    pub fn get_body<T>(&self) -> Result<Option<T>, RequestError>
+    pub fn get_body<T>(&self) -> Result<T, RequestError>
     where
         T: DeserializeOwned,
     {
@@ -55,10 +55,10 @@ impl Request {
             ));
         }
 
-        Ok(Some(body_res.unwrap()))
+        Ok(body_res.unwrap())
     }
 
-    pub fn get_body_validated<T>(&self) -> Result<Option<T>, RequestError>
+    pub fn get_body_validated<T>(&self) -> Result<T, RequestError>
     where
         T: DeserializeOwned + Validate,
     {
@@ -82,6 +82,6 @@ impl Request {
         }
 
 
-        Ok(Some(body))
+        Ok(body)
     }
 }

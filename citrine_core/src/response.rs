@@ -18,7 +18,7 @@ impl Response {
         }
     }
 
-    pub fn add_header(mut self, key: &HeaderName, value: &str) -> Self {
+    pub fn add_header(mut self, key: HeaderName, value: &str) -> Self {
         let value = HeaderValue::from_str(value).unwrap();
         self.headers.insert(key, value);
 

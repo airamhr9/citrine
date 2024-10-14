@@ -184,12 +184,12 @@ fn delete_by_id_controller(state: Arc<State>, req: Request) -> Response {
 }
 
 fn create_user_controler(state: Arc<State>, req: Request) -> Response {
-    let read_body_res: Result<Option<User>, RequestError> = req.get_body_validated();
+    let read_body_res: Result<User, RequestError> = req.get_body_validated();
     if let Err(e) = read_body_res {
         return e.to_response();
     }
 
-    let user = read_body_res.unwrap().unwrap();
+    let user = read_body_res.unwrap();
     let mut db = state.db.get().unwrap();
 
     if let Err(e) = create(user, &mut db) {
@@ -203,12 +203,12 @@ fn create_user_controler(state: Arc<State>, req: Request) -> Response {
 }
 
 fn update_user_controler(state: Arc<State>, req: Request) -> Response {
-    let read_body_res: Result<Option<UpdateUser>, RequestError> = req.get_body_validated();
+    let read_body_res: Result<UpdateUser, RequestError> = req.get_body_validated();
     if let Err(e) = read_body_res {
         return e.to_response();
     }
 
-    let user = read_body_res.unwrap().unwrap();
+    let user = read_body_res.unwrap();
     let id = req.path_variables.get("id").unwrap();
 
     let mut db = state.db.get().unwrap();
