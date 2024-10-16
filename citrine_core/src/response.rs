@@ -2,6 +2,9 @@ use http_body_util::Full;
 use hyper::{body::Bytes, HeaderMap, StatusCode};
 use hyper::header::{HeaderName, HeaderValue, CONTENT_TYPE};
 use serde::Serialize;
+use tera::Context;
+
+use crate::views;
 
 pub struct Response {
     pub status: StatusCode,
@@ -14,9 +17,37 @@ impl Response {
         Response {
             status,
             body: None,
-            headers: HeaderMap::new(),
+            headers: HeaderMap::new()
         }
     }
+
+    pub fn static_view(template_name: &str) -> Result<Self, tera::Error> {
+        let mut response = Self::new(StatusCode::OK)
+            .body(views::render_view_with_context(template_name, &Context::new())?);
+
+        response.headers.insert(CONTENT_TYPE, HeaderValue::from_static("text/html; charset=utf-8"));
+
+        Ok(response)
+    }
+
+    pub fn view(template_name: &str, data: &impl Serialize) -> Result<Self, tera::Error> {
+        let mut response = Self::new(StatusCode::OK)
+            .body(views::render_view(template_name, data)?);
+
+        response.headers.insert(CONTENT_TYPE, HeaderValue::from_static("text/html; charset=utf-8"));
+
+        Ok(response)
+    }
+
+    pub fn view_from_context(template_name: &str, context: &Context) -> Result<Self, tera::Error> {
+        let mut response = Self::new(StatusCode::OK)
+            .body(views::render_view_with_context(template_name, context)?);
+
+        response.headers.insert(CONTENT_TYPE, HeaderValue::from_static("text/html; charset=utf-8"));
+
+        Ok(response)
+    }
+
 
     pub fn add_header(mut self, key: HeaderName, value: &str) -> Self {
         let value = HeaderValue::from_str(value).unwrap();

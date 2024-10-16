@@ -235,12 +235,11 @@ mod tests {
     use super::*;
 
     struct StateTest {
-        counter: i32,
     }
 
     impl Default for StateTest {
         fn default() -> Self {
-            StateTest { counter: 0 }
+            StateTest { }
         }
     }
 

@@ -11,3 +11,7 @@ mod error;
 pub mod request;
 pub mod response;
 pub mod application;
+pub mod views;
+
+#[macro_use]
+extern crate lazy_static;
