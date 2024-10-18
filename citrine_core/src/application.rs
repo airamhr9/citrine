@@ -1,7 +1,11 @@
 use log::info;
+use tera::Tera;
 
 use crate::{
-    error::ServerError, request::Request, response::Response, router::{InternalRouter, Router}
+    error::ServerError,
+    request::Request,
+    response::Response,
+    router::{InternalRouter, Router}, views,
 };
 
 struct Application<T: Send + Sync + 'static> {
@@ -10,6 +14,8 @@ struct Application<T: Send + Sync + 'static> {
     port: u16,
     interceptor: Option<fn(&Request, &Response)>,
     router: InternalRouter<T>,
+    load_templates: bool,
+    configure_tera: fn(Tera) -> Tera,
 }
 
 impl<T> Application<T>
@@ -21,13 +27,13 @@ where
             "Starting application {} v{} (via Citrine)",
             self.name, self.version
         );
-
-        crate::server::start(
-            self.port,
-            self.interceptor,
-            self.router,
-        )
-        .await;
+        
+        if self.load_templates {
+            if let Err(e) = views::init_templates(self.configure_tera) {
+                panic!("Error loading templates: {}", e);
+            }
+        }
+        crate::server::start(self.port, self.interceptor, self.router).await;
 
         Result::Ok(())
     }
@@ -40,6 +46,8 @@ pub struct ApplicationBuilder<T: Send + Sync + 'static> {
     interceptor: Option<fn(&Request, &Response)>,
     state: T,
     routes: Vec<Router<T>>,
+    load_templates: bool,
+    configure_tera: fn(Tera) -> Tera,
 }
 
 impl<T> ApplicationBuilder<T>
@@ -68,10 +76,7 @@ where
         self
     }
 
-    pub fn interceptor(
-        mut self,
-        interceptor: fn(&Request, &Response),
-    ) -> ApplicationBuilder<T> {
+    pub fn interceptor(mut self, interceptor: fn(&Request, &Response)) -> ApplicationBuilder<T> {
         self.interceptor = Some(interceptor);
         self
     }
@@ -86,6 +91,22 @@ where
         self
     }
 
+    // Tera will need to be configured when not in debug mode. 
+    // As of now, to make development easier, tera is reloaded in every template request 
+    // to reflect in real time changes in template code, but this will not be
+    // the case when running in production mode
+    pub fn configure_tera(mut self, configuration: fn(Tera) -> Tera) -> Self {
+        self.configure_tera = configuration;
+        // doesn't make sense to configure tera and not enable it
+        self.load_templates = true;
+        self
+    }
+
+    pub fn load_templates(mut self) -> Self {
+        self.load_templates = true;
+        self
+    }
+
     pub async fn start(self) -> Result<(), ServerError> {
         let internal_router_res = InternalRouter::from(self.routes, self.state);
         if let Err(e) = internal_router_res {
@@ -97,6 +118,8 @@ where
             port: self.port,
             interceptor: self.interceptor,
             router: internal_router_res.unwrap(),
+            load_templates: self.load_templates,
+            configure_tera: self.configure_tera
         }
         .start()
         .await
@@ -115,6 +138,8 @@ where
             interceptor: None,
             routes: vec![],
             state: T::default(),
+            load_templates: false,
+            configure_tera: |t| t,
         }
     }
 }
