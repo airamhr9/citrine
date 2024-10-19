@@ -1,10 +1,12 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use citrine_core::application::ApplicationBuilder;
 use citrine_core::request::Request;
 use citrine_core::response::Response;
 use citrine_core::{
-    self, tokio, DefaultErrorResponseBody, Method, RequestError, Router, ServerError, StatusCode,
+    self, tera, tokio, DefaultErrorResponseBody, Method, RequestError, Router, ServerError,
+    StatusCode,
 };
 use validator::Validate;
 
@@ -34,6 +36,10 @@ async fn main() -> Result<(), ServerError> {
                 request.get_body_raw(),
                 response.status,
             )
+        })
+        .configure_tera(|mut tera| {
+            tera.register_filter("url_encode", url_encode_filter);
+            tera
         })
         .add_routes(
             Router::new()
@@ -70,7 +76,7 @@ impl Default for State {
     fn default() -> Self {
         // create connection pool
         let pool =
-            skytable::pool::get(32, Config::new_default("root", "123456789101112131415")).unwrap();
+            skytable::pool::get(8, Config::new_default("root", "123456789101112131415")).unwrap();
 
         let mut db = pool.get().unwrap();
 
@@ -80,7 +86,7 @@ impl Default for State {
         db.query_parse::<()>(&query!("create space sample"))
             .unwrap();
         db.query_parse::<()>(&query!(
-            "create model sample.users(id: string, username: string, mail: string)"
+            "create model sample.users(id: string, username: string, mail: string, profile_picture_url: string)"
         ))
         .unwrap();
 
@@ -105,6 +111,25 @@ impl Default for State {
 #[derive(skytable::Query, skytable::Response, Clone, Serialize, Deserialize, Validate)]
 pub struct User {
     pub id: String,
+    pub username: String,
+    pub mail: String,
+    pub profile_picture_url: String,
+}
+
+impl From<CreateUser> for User {
+    fn from(value: CreateUser) -> Self {
+        User {
+            id: value.id,
+            username: value.username,
+            mail: value.mail,
+            profile_picture_url: String::new()
+        }
+    }
+}
+
+#[derive(skytable::Query, Deserialize, Validate)]
+pub struct CreateUser {
+    pub id: String,
     #[validate(length(min = 1))]
     pub username: String,
     #[validate(email)]
@@ -119,9 +144,27 @@ pub struct UpdateUser {
     pub mail: String,
 }
 
+#[derive(Serialize)]
+pub struct UserListResponse {
+    users: Vec<User>,
+}
+
 /*
- * This is the router, this adds all the REST endpoints to the application and sets a function
- * handler for each.
+ * This is the handler for the / path. In this case we are going to return an HTML template
+ * */
+
+fn base_path_controller(state: Arc<State>, _: Request) -> Response {
+    let mut db = state.get_db_connection();
+    let users = UserListResponse {
+        users: find_all_users(&mut db),
+    };
+
+    Response::view("index.html", &users).unwrap()
+}
+
+/*
+ * This is the users REST router, this adds all of the REST endpoints  for the user entity to the
+ * application and sets a function handler for each.
  * */
 
 fn user_router() -> Router<State> {
@@ -137,15 +180,6 @@ fn user_router() -> Router<State> {
  * This are the REST endpoint handlers. They receive the application's state struct and the request
  * as parameters.
  * */
-
-fn base_path_controller(_: Arc<State>, req: Request) -> Response {
-    let body = req.get_body_raw().clone();
-
-    Response::new(StatusCode::OK).body(format!(
-        "This is the base path. Echo: {}",
-        body.unwrap_or("".to_string())
-    ))
-}
 
 fn find_all_users_controller(state: Arc<State>, _: Request) -> Response {
     let mut db = state.get_db_connection();
@@ -184,7 +218,7 @@ fn delete_by_id_controller(state: Arc<State>, req: Request) -> Response {
 }
 
 fn create_user_controler(state: Arc<State>, req: Request) -> Response {
-    let read_body_res: Result<User, RequestError> = req.get_body_validated();
+    let read_body_res: Result<CreateUser, RequestError> = req.get_body_validated();
     if let Err(e) = read_body_res {
         return e.to_response();
     }
@@ -192,7 +226,7 @@ fn create_user_controler(state: Arc<State>, req: Request) -> Response {
     let user = read_body_res.unwrap();
     let mut db = state.db.get().unwrap();
 
-    if let Err(e) = create(user, &mut db) {
+    if let Err(e) = create(user.into(), &mut db) {
         Response::new(StatusCode::INTERNAL_SERVER_ERROR).json(DefaultErrorResponseBody::new(
             StatusCode::INTERNAL_SERVER_ERROR,
             e.to_string(),
@@ -246,7 +280,7 @@ fn find_by_id(id: &String, db: &mut DbConnection) -> Option<User> {
 }
 
 fn create(user: User, db: &mut DbConnection) -> Result<(), skytable::error::Error> {
-    db.query_parse::<()>(&query!("insert into sample.users(?, ?, ?)", user))
+    db.query_parse::<()>(&query!("insert into sample.users(?, ?, ?, ?)", user))
 }
 
 fn delete(id: &String, db: &mut DbConnection) -> Result<(), skytable::error::Error> {
@@ -259,15 +293,26 @@ fn update(
     db: &mut DbConnection,
 ) -> Result<(), skytable::error::Error> {
     db.query_parse::<()>(&query!(
-        "update sample.users set username = ?, mail = ? where id = ?",
+        "update sample.users set username = ?, mail = ?, profile_picture_url ? where id = ?",
         &req,
         id
     ))
 }
 
-/*
- * This is just some mock data to to insert on intialization
- * */
+fn url_encode_filter(
+    value: &tera::Value,
+    _: &HashMap<String, tera::Value>,
+) -> tera::Result<tera::Value> {
+    let input = value
+        .as_str()
+        .ok_or_else(|| tera::Error::msg("Expected a string for url_encode filter"))?;
+
+    let encoded = url::form_urlencoded::byte_serialize(input.as_bytes()).collect();
+
+    Ok(tera::Value::String(encoded))
+}
+
+// This is just some mock data to to insert on intialization
 
 lazy_static! {
     static ref USERS: Vec<User> = vec![
@@ -275,51 +320,61 @@ lazy_static! {
             id: String::from("1"),
             username: String::from("alice123"),
             mail: String::from("alice@example.com"),
+            profile_picture_url: String::from("https://i.pravatar.cc/150?u=alice@example.com"),
         },
         User {
             id: String::from("2"),
             username: String::from("bob_the_builder"),
             mail: String::from("bob@builder.com"),
+            profile_picture_url: String::new()
         },
         User {
             id: String::from("3"),
             username: String::from("charlie_brown"),
             mail: String::from("charlie@peanuts.com"),
+            profile_picture_url: String::from("https://i.pravatar.cc/150?u=charlie@peanuts.com"),
         },
         User {
             id: String::from("4"),
             username: String::from("dave99"),
             mail: String::from("dave99@example.com"),
+            profile_picture_url: String::from("https://i.pravatar.cc/150?u=dave99@example.com"),
         },
         User {
             id: String::from("5"),
             username: String::from("eve_adventurer"),
             mail: String::from("eve@adventure.com"),
+            profile_picture_url: String::from("https://i.pravatar.cc/150?u=eve@adventure.com"),
         },
         User {
             id: String::from("6"),
             username: String::from("frankie_music"),
             mail: String::from("frankie@music.com"),
+            profile_picture_url: String::new()
         },
         User {
             id: String::from("7"),
             username: String::from("grace_hopper"),
             mail: String::from("grace@hopper.com"),
+            profile_picture_url: String::from("https://i.pravatar.cc/150?u=grace@hopper.com"),
         },
         User {
             id: String::from("8"),
             username: String::from("hank_punny"),
             mail: String::from("hank@pun.com"),
+            profile_picture_url: String::from("https://i.pravatar.cc/150?u=hank@pun.com"),
         },
         User {
             id: String::from("9"),
             username: String::from("ivy_lee"),
             mail: String::from("ivy@leaf.com"),
+            profile_picture_url: String::new()
         },
         User {
             id: String::from("10"),
             username: String::from("jack_sparrow"),
             mail: String::from("jack@caribbean.com"),
+            profile_picture_url: String::from("https://i.pravatar.cc/150?u=jack@caribbean.com"),
         },
     ];
 }

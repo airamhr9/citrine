@@ -70,8 +70,6 @@ pub fn render_view_with_context(
         }
         tera.render(template_name, context)
     } else {
-        // This should never happen as init_templates() is called on App initialization before
-        // any request can be handled. Maybe can be removed
         if TEMPLATES.get().is_none() {
             panic!("Tera template engine not initialized")
         }

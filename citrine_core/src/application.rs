@@ -5,7 +5,8 @@ use crate::{
     error::ServerError,
     request::Request,
     response::Response,
-    router::{InternalRouter, Router}, views,
+    router::{InternalRouter, Router},
+    views,
 };
 
 struct Application<T: Send + Sync + 'static> {
@@ -27,7 +28,7 @@ where
             "Starting application {} v{} (via Citrine)",
             self.name, self.version
         );
-        
+
         if self.load_templates {
             if let Err(e) = views::init_templates(self.configure_tera) {
                 panic!("Error loading templates: {}", e);
@@ -91,10 +92,12 @@ where
         self
     }
 
-    // Tera will need to be configured when not in debug mode. 
-    // As of now, to make development easier, tera is reloaded in every template request 
-    // to reflect in real time changes in template code, but this will not be
-    // the case when running in production mode
+    /*
+     * Tera will need to be configured when not in debug mode.
+     * As of now, to make development easier, tera is reloaded in every template request
+     * when running with debug_assertions to reflect changes in template code, but this will not
+     * be the case when running in production mode
+     */
     pub fn configure_tera(mut self, configuration: fn(Tera) -> Tera) -> Self {
         self.configure_tera = configuration;
         // doesn't make sense to configure tera and not enable it
@@ -119,7 +122,7 @@ where
             interceptor: self.interceptor,
             router: internal_router_res.unwrap(),
             load_templates: self.load_templates,
-            configure_tera: self.configure_tera
+            configure_tera: self.configure_tera,
         }
         .start()
         .await

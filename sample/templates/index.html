@@ -1,0 +1,25 @@
+{% include "headers.html" %}
+<header class="py-3 mb-4 border-bottom">
+    <div class="container d-flex flex-wrap justify-content-center">
+        <a href="/" class="d-flex align-items-center mb-3 mb-lg-0 me-lg-auto text-dark text-decoration-none">
+            <span class="fs-4">User List Sample</span>
+        </a>
+    </div>
+</header>
+<div class="grid xs:grid-cols-1 md:grid-cols-2 gap-2 m-3">
+    {% for user in users %}
+    <div class="card">
+        {% if user.profile_picture_url == "" %}
+        <img class="w-10 h-10 rounded ml-4 mt-3" src="https://ui-avatars.com/api/?name={{user.username | url_encode }}"
+            alt="Profile picture">
+        {% else %}
+        <img class="w-10 h-10 rounded ml-4 mt-3" src="{{user.profile_picture_url}}" alt="Profile picture">
+        {% endif %}
+        <div class="card-body">
+            <h5 class="card-title"> {{user.username}} </h5>
+            <h6 class="card-subtitle mb-2 text-muted"> {{user.mail}} </h6>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% include "bottom.html" %}
