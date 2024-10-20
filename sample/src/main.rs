@@ -2,8 +2,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use citrine_core::application::ApplicationBuilder;
+use citrine_core::jsonwebtoken::Algorithm;
 use citrine_core::request::Request;
 use citrine_core::response::Response;
+use citrine_core::security::{
+    Authenticator, JWTConfiguration, MethodMatcher, SecurityAction, SecurityConfiguration,
+};
 use citrine_core::{
     self, tera, tokio, DefaultErrorResponseBody, Method, RequestError, Router, ServerError,
     StatusCode,
@@ -24,13 +28,23 @@ extern crate lazy_static;
 async fn main() -> Result<(), ServerError> {
     env_logger::init();
 
+    // This is a dummy JWT secret key for testing purposes. You should generate one and use it via environment variables
+    let jwt_secret = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
     ApplicationBuilder::<State>::new()
         .name("Citrine sample application")
         .version("0.0.1")
         .port(8080)
         .interceptor(|request, response| {
+            let user = if let Some(claims) = request.auth_result.get_claims() {
+                claims.name.clone().unwrap_or("No user in token".to_string())
+            } else {
+                "Empty".to_string()
+            };
+
             info!(
-                "Request: {} {} body: {:?}. Response: {}",
+                "User: {} | Request: {} {} body: {:?} | Response: {}",
+                user,
                 request.method,
                 request.uri,
                 request.get_body_raw(),
@@ -41,6 +55,22 @@ async fn main() -> Result<(), ServerError> {
             tera.register_filter("url_encode", url_encode_filter);
             tera
         })
+        .security_configuration(
+            SecurityConfiguration::new()
+                // We protect writes in the /api/ subdomain but allow reads 
+                .add_rule(
+                    MethodMatcher::Multiple(vec![Method::POST, Method::PUT]),
+                    "/api/*",
+                    SecurityAction::Authenticate(Authenticator::JWT(JWTConfiguration::new(
+                        jwt_secret,
+                        Algorithm::HS256,
+                    ))),
+                )
+                // Any other request is allowed. This is the default behaviour if this line is
+                // removed, but adding it makes it more explicit what you want to do with with
+                // the requests that do not match the rules above
+                .add_rule(MethodMatcher::All, "/*", SecurityAction::Allow),
+        )
         .add_routes(
             Router::new()
                 .add_route(Method::GET, "", base_path_controller)
@@ -122,7 +152,7 @@ impl From<CreateUser> for User {
             id: value.id,
             username: value.username,
             mail: value.mail,
-            profile_picture_url: String::new()
+            profile_picture_url: String::new(),
         }
     }
 }

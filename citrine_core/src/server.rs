@@ -15,11 +15,13 @@ use crate::error::{ErrorType, RequestError, ServerError};
 use crate::request::Request;
 use crate::response::Response;
 use crate::router::InternalRouter;
+use crate::security::{AuthResult, SecurityConfiguration};
 
 pub async fn start<T>(
     port: u16,
     interceptor: Option<fn(&Request, &Response)>,
     router: InternalRouter<T>,
+    security_configuration: SecurityConfiguration
 ) where
     T: 'static + Sync + Send,
 {
@@ -43,6 +45,8 @@ pub async fn start<T>(
 
     let router = Arc::new(router);
 
+    let security_configuration = Arc::new(security_configuration);
+
     loop {
         tokio::select! {
             Ok((stream, _addr)) = listener.accept() => {
@@ -50,8 +54,9 @@ pub async fn start<T>(
 
                 //todo check how to avoid this double cloning
                 let req_router = router.clone();
+                let security_configuration = security_configuration.clone();
                 let svc = service_fn(move |request| {
-                    handle_request(interceptor, request, req_router.clone())
+                    handle_request(interceptor, request, req_router.clone(), security_configuration.clone())
                 });
 
                 let conn = http.serve_connection(io, svc);
@@ -96,9 +101,11 @@ async fn handle_request<T: Send + Sync + 'static>(
     interceptor: fn(&Request, &Response),
     request: hyper::Request<hyper::body::Incoming>,
     router: Arc<InternalRouter<T>>,
+    security_configuration: Arc<SecurityConfiguration>
 ) -> Result<hyper::Response<Full<Bytes>>, ServerError> {
     let uri = request.uri().clone();
     let method = request.method().clone();
+    let headers = request.headers().clone();
 
     // return default error response if request body cant be read
     // check if the map_response error should be explicitly handled
@@ -115,7 +122,13 @@ async fn handle_request<T: Send + Sync + 'static>(
         )?);
     }
 
-    let internal_request = Request::new(method, uri, body_string);
+    let mut internal_request = Request::new(method, uri, body_string, headers);
+    
+    let auth_result = security_configuration.authorize(&internal_request);
+    if auth_result == AuthResult::Denied {
+        return Ok(map_response(RequestError::with_message(ErrorType::Unauthorized, internal_request.uri.path()).to_response())?);
+    }
+    internal_request.auth_result = auth_result;
 
     //todo check if this clone can or should be removed
     let router_result = router.run(internal_request.clone());

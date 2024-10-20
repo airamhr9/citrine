@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use hyper::{Method, Uri};
+use hyper::{HeaderMap, Method, Uri};
 use serde::de::DeserializeOwned;
 use validator::Validate;
 
-use crate::error::{ErrorType, RequestError};
+use crate::{error::{ErrorType, RequestError}, security::AuthResult};
 
 #[derive(Debug, Clone)]
 pub struct Request {
@@ -12,10 +12,12 @@ pub struct Request {
     pub uri: Uri,
     body: Option<String>,
     pub path_variables: HashMap<String, String>,
+    pub headers: HeaderMap,
+    pub auth_result: AuthResult
 }
 
 impl Request {
-    pub fn new(method: Method, uri: Uri, body: String) -> Self {
+    pub fn new(method: Method, uri: Uri, body: String, headers: HeaderMap) -> Self {
         let body = if method != Method::GET {
             Some(body)
         } else {
@@ -26,6 +28,8 @@ impl Request {
             uri,
             body,
             path_variables: HashMap::new(),
+            headers,
+            auth_result: AuthResult::Allowed
         }
     }
 

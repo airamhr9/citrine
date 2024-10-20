@@ -19,6 +19,7 @@ pub enum ErrorType {
     Internal,
     MissingBody,
     FailedValidation(ValidationErrors),
+    Unauthorized
 }
 
 impl ErrorType {
@@ -30,6 +31,7 @@ impl ErrorType {
             ErrorType::Internal => "There was an error handling the request",
             ErrorType::MissingBody => "Request body is missing",
             ErrorType::FailedValidation(_) => "Request body failed validation",
+            ErrorType::Unauthorized => "Unauthorized",
         }
     }
 }
@@ -61,6 +63,7 @@ impl RequestError {
             ErrorType::NotFound => StatusCode::NOT_FOUND,
             ErrorType::MethodNotAllowed => StatusCode::METHOD_NOT_ALLOWED,
             ErrorType::Internal => StatusCode::INTERNAL_SERVER_ERROR,
+            ErrorType::Unauthorized => StatusCode::UNAUTHORIZED,
             ErrorType::RequestBodyUnreadable
             | ErrorType::MissingBody
             | ErrorType::FailedValidation(_) => StatusCode::BAD_REQUEST,

@@ -2,11 +2,7 @@ use log::info;
 use tera::Tera;
 
 use crate::{
-    error::ServerError,
-    request::Request,
-    response::Response,
-    router::{InternalRouter, Router},
-    views,
+    error::ServerError, request::Request, response::Response, router::{InternalRouter, Router}, security::SecurityConfiguration, views
 };
 
 struct Application<T: Send + Sync + 'static> {
@@ -17,6 +13,7 @@ struct Application<T: Send + Sync + 'static> {
     router: InternalRouter<T>,
     load_templates: bool,
     configure_tera: fn(Tera) -> Tera,
+    security_configuration: SecurityConfiguration
 }
 
 impl<T> Application<T>
@@ -34,7 +31,7 @@ where
                 panic!("Error loading templates: {}", e);
             }
         }
-        crate::server::start(self.port, self.interceptor, self.router).await;
+        crate::server::start(self.port, self.interceptor, self.router, self.security_configuration).await;
 
         Result::Ok(())
     }
@@ -49,6 +46,7 @@ pub struct ApplicationBuilder<T: Send + Sync + 'static> {
     routes: Vec<Router<T>>,
     load_templates: bool,
     configure_tera: fn(Tera) -> Tera,
+    security_configuration: SecurityConfiguration
 }
 
 impl<T> ApplicationBuilder<T>
@@ -84,6 +82,11 @@ where
 
     pub fn state(mut self, state: T) -> ApplicationBuilder<T> {
         self.state = state;
+        self
+    }
+
+    pub fn security_configuration(mut self, security_configuration: SecurityConfiguration) -> ApplicationBuilder<T> {
+        self.security_configuration = security_configuration;
         self
     }
 
@@ -123,6 +126,7 @@ where
             router: internal_router_res.unwrap(),
             load_templates: self.load_templates,
             configure_tera: self.configure_tera,
+            security_configuration: self.security_configuration
         }
         .start()
         .await
@@ -143,6 +147,7 @@ where
             state: T::default(),
             load_templates: false,
             configure_tera: |t| t,
+            security_configuration: SecurityConfiguration::new()
         }
     }
 }

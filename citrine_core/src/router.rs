@@ -230,7 +230,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use hyper::{StatusCode, Uri};
+    use hyper::{HeaderMap, StatusCode, Uri};
 
     use super::*;
 
@@ -271,13 +271,13 @@ mod tests {
         }
 
         let uri1 = Uri::from_static("http://domain.com/hello");
-        let req1: Request = Request::new(Method::GET, uri1, "Body".to_string());
+        let req1: Request = Request::new(Method::GET, uri1, "Body".to_string(), HeaderMap::new());
         let uri2 = Uri::from_static("http://domain.com/hello/other");
-        let req2: Request = Request::new(Method::POST, uri2, "Body".to_string());
+        let req2: Request = Request::new(Method::POST, uri2, "Body".to_string(), HeaderMap::new());
         let uri3 = Uri::from_static("http://domain.com/hi/other");
-        let req3: Request = Request::new(Method::GET, uri3, "Body".to_string());
+        let req3: Request = Request::new(Method::GET, uri3, "Body".to_string(), HeaderMap::new());
         let uri4 = Uri::from_static("http://domain.com/hi/other");
-        let req4: Request = Request::new(Method::PUT, uri4, "Body".to_string());
+        let req4: Request = Request::new(Method::PUT, uri4, "Body".to_string(), HeaderMap::new());
 
         let _ = router.run(req1);
         let _ = router.run(req2);
