@@ -1,4 +1,6 @@
+use hyper::body::Incoming;
 use hyper::Method;
+use hyper_staticfile::Static;
 use log::debug;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -10,6 +12,35 @@ use crate::request::Request;
 use crate::response::Response;
 
 pub type RequestHandler<T> = fn(Arc<T>, Request) -> Response;
+
+#[derive(Clone)]
+pub struct StaticFileServer {
+    pub url_base_path: String,
+    pub server: Option<Static>
+}
+
+impl StaticFileServer {
+    pub fn new(url_base_path: &str, server: Static) -> Self {
+        StaticFileServer {
+            url_base_path: url_base_path.to_string(),
+            server: Some(server)
+        }
+    }
+
+    pub fn can_serve_request(&self, request: &hyper::Request<Incoming>) -> bool {
+        self.server.is_some() && request.method() == Method::GET
+            && request.uri().path().starts_with(&self.url_base_path)
+    }
+}
+
+impl Default for StaticFileServer {
+    fn default() -> Self {
+        StaticFileServer {
+            url_base_path: String::new(),
+            server: None
+        }
+    }
+}
 
 pub struct Router<T: Send + Sync + 'static> {
     pub base_path: String,

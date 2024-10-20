@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use citrine_core::application::ApplicationBuilder;
@@ -29,7 +30,7 @@ async fn main() -> Result<(), ServerError> {
     env_logger::init();
 
     // This is a dummy JWT secret key for testing purposes. You should generate one and use it via environment variables
-    let jwt_secret = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let jwt_secret = "NTNv7j0TuYARvmNMmWXo6fKvM4o6nv/aUi9ryX38ZH+L1bkrnD1ObOQ8JAUmHCBq7Iy7otZcyAagBLHVKvvYaIpmMuxmARQ97jUVG16Jkpkp1wXOPsrF9zwew6TpczyHkHgX5EuLg2MeBuiT/qJACs1J0apruOOJCg/gOtkjB4c=";
 
     ApplicationBuilder::<State>::new()
         .name("Citrine sample application")
@@ -37,7 +38,10 @@ async fn main() -> Result<(), ServerError> {
         .port(8080)
         .interceptor(|request, response| {
             let user = if let Some(claims) = request.auth_result.get_claims() {
-                claims.name.clone().unwrap_or("No user in token".to_string())
+                claims
+                    .name
+                    .clone()
+                    .unwrap_or("No user in token".to_string())
             } else {
                 "Empty".to_string()
             };
@@ -51,13 +55,15 @@ async fn main() -> Result<(), ServerError> {
                 response.status,
             )
         })
+        // we serve all of the files under the ./public folder in the base path of our application
+        .serve_static_files("/", PathBuf::from("./public"))
         .configure_tera(|mut tera| {
             tera.register_filter("url_encode", url_encode_filter);
             tera
         })
         .security_configuration(
             SecurityConfiguration::new()
-                // We protect writes in the /api/ subdomain but allow reads 
+                // We protect writes in the /api subdomain but allow reads
                 .add_rule(
                     MethodMatcher::Multiple(vec![Method::POST, Method::PUT]),
                     "/api/*",
@@ -74,7 +80,7 @@ async fn main() -> Result<(), ServerError> {
         .add_routes(
             Router::new()
                 .add_route(Method::GET, "", base_path_controller)
-                .add_router(Router::base_path("/api").add_router(user_router())),
+                .add_router(Router::base_path("/api").add_router(user_router()))
         )
         .start()
         .await
@@ -329,6 +335,7 @@ fn update(
     ))
 }
 
+// A filter to use in our Tera templates
 fn url_encode_filter(
     value: &tera::Value,
     _: &HashMap<String, tera::Value>,
@@ -342,7 +349,7 @@ fn url_encode_filter(
     Ok(tera::Value::String(encoded))
 }
 
-// This is just some mock data to to insert on intialization
+// Mock data to to insert on intialization
 
 lazy_static! {
     static ref USERS: Vec<User> = vec![

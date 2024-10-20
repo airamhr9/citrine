@@ -1,8 +1,11 @@
+use std::path::PathBuf;
+
+use hyper_staticfile::Static;
 use log::info;
 use tera::Tera;
 
 use crate::{
-    error::ServerError, request::Request, response::Response, router::{InternalRouter, Router}, security::SecurityConfiguration, views
+    error::ServerError, request::Request, response::Response, router::{InternalRouter, Router, StaticFileServer}, security::SecurityConfiguration, views
 };
 
 struct Application<T: Send + Sync + 'static> {
@@ -13,7 +16,8 @@ struct Application<T: Send + Sync + 'static> {
     router: InternalRouter<T>,
     load_templates: bool,
     configure_tera: fn(Tera) -> Tera,
-    security_configuration: SecurityConfiguration
+    security_configuration: SecurityConfiguration,
+    static_file_server: StaticFileServer
 }
 
 impl<T> Application<T>
@@ -31,7 +35,8 @@ where
                 panic!("Error loading templates: {}", e);
             }
         }
-        crate::server::start(self.port, self.interceptor, self.router, self.security_configuration).await;
+        crate::server::start(self.port, self.interceptor, self.router, 
+            self.security_configuration, self.static_file_server).await;
 
         Result::Ok(())
     }
@@ -46,7 +51,8 @@ pub struct ApplicationBuilder<T: Send + Sync + 'static> {
     routes: Vec<Router<T>>,
     load_templates: bool,
     configure_tera: fn(Tera) -> Tera,
-    security_configuration: SecurityConfiguration
+    security_configuration: SecurityConfiguration,
+    static_file_server: StaticFileServer
 }
 
 impl<T> ApplicationBuilder<T>
@@ -108,6 +114,11 @@ where
         self
     }
 
+    pub fn serve_static_files(mut self, url_base_path: &str, directory: PathBuf) -> Self {
+        self.static_file_server = StaticFileServer::new(url_base_path, Static::new(directory));
+        self
+    }
+
     pub fn load_templates(mut self) -> Self {
         self.load_templates = true;
         self
@@ -126,7 +137,8 @@ where
             router: internal_router_res.unwrap(),
             load_templates: self.load_templates,
             configure_tera: self.configure_tera,
-            security_configuration: self.security_configuration
+            security_configuration: self.security_configuration,
+            static_file_server: self.static_file_server
         }
         .start()
         .await
@@ -147,7 +159,8 @@ where
             state: T::default(),
             load_templates: false,
             configure_tera: |t| t,
-            security_configuration: SecurityConfiguration::new()
+            security_configuration: SecurityConfiguration::new(),
+            static_file_server: StaticFileServer::default()
         }
     }
 }
