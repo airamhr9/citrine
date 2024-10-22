@@ -5,7 +5,13 @@ use log::info;
 use tera::Tera;
 
 use crate::{
-    error::ServerError, request::Request, response::Response, router::{InternalRouter, Router, StaticFileServer}, security::SecurityConfiguration, views
+    error::ServerError,
+    request::Request,
+    response::Response,
+    router::{InternalRouter, Router, StaticFileServer},
+    security::SecurityConfiguration,
+    server::RequestPipelineConfiguration,
+    views,
 };
 
 struct Application<T: Send + Sync + 'static> {
@@ -17,7 +23,7 @@ struct Application<T: Send + Sync + 'static> {
     load_templates: bool,
     configure_tera: fn(Tera) -> Tera,
     security_configuration: SecurityConfiguration,
-    static_file_server: StaticFileServer
+    static_file_server: StaticFileServer,
 }
 
 impl<T> Application<T>
@@ -35,8 +41,16 @@ where
                 panic!("Error loading templates: {}", e);
             }
         }
-        crate::server::start(self.port, self.interceptor, self.router, 
-            self.security_configuration, self.static_file_server).await;
+        crate::server::start(
+            self.port,
+            RequestPipelineConfiguration::new(
+                self.interceptor,
+                self.router,
+                self.security_configuration,
+                self.static_file_server,
+            ),
+        )
+        .await;
 
         Result::Ok(())
     }
@@ -52,7 +66,7 @@ pub struct ApplicationBuilder<T: Send + Sync + 'static> {
     load_templates: bool,
     configure_tera: fn(Tera) -> Tera,
     security_configuration: SecurityConfiguration,
-    static_file_server: StaticFileServer
+    static_file_server: StaticFileServer,
 }
 
 impl<T> ApplicationBuilder<T>
@@ -91,7 +105,10 @@ where
         self
     }
 
-    pub fn security_configuration(mut self, security_configuration: SecurityConfiguration) -> ApplicationBuilder<T> {
+    pub fn security_configuration(
+        mut self,
+        security_configuration: SecurityConfiguration,
+    ) -> ApplicationBuilder<T> {
         self.security_configuration = security_configuration;
         self
     }
@@ -138,7 +155,7 @@ where
             load_templates: self.load_templates,
             configure_tera: self.configure_tera,
             security_configuration: self.security_configuration,
-            static_file_server: self.static_file_server
+            static_file_server: self.static_file_server,
         }
         .start()
         .await
@@ -160,7 +177,7 @@ where
             load_templates: false,
             configure_tera: |t| t,
             security_configuration: SecurityConfiguration::new(),
-            static_file_server: StaticFileServer::default()
+            static_file_server: StaticFileServer::default(),
         }
     }
 }

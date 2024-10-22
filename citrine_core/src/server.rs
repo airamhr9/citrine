@@ -1,8 +1,8 @@
 use http_body_util::{BodyExt, Full};
 use hyper::body::{Buf, Incoming};
 use hyper::service::service_fn;
-use hyper::{Method, StatusCode};
 use hyper::{body::Bytes, server::conn::http1};
+use hyper::{Method, StatusCode};
 use hyper_util::rt::TokioIo;
 use hyper_util::server::graceful::GracefulShutdown;
 use log::{error, info};
@@ -18,13 +18,34 @@ use crate::response::Response;
 use crate::router::{InternalRouter, StaticFileServer};
 use crate::security::{AuthResult, SecurityConfiguration};
 
-pub async fn start<T>(
-    port: u16,
-    interceptor: Option<fn(&Request, &Response)>,
+pub struct RequestPipelineConfiguration<T: 'static + Send + Sync> {
+    interceptor: fn(&Request, &Response),
     router: InternalRouter<T>,
     security_configuration: SecurityConfiguration,
     static_file_server: StaticFileServer,
-) where
+}
+
+impl<T> RequestPipelineConfiguration<T>
+where
+    T: 'static + Send + Sync,
+{
+    pub fn new(
+        interceptor: Option<fn(&Request, &Response)>,
+        router: InternalRouter<T>,
+        security_configuration: SecurityConfiguration,
+        static_file_server: StaticFileServer,
+    ) -> Self {
+        RequestPipelineConfiguration {
+            interceptor: interceptor.unwrap_or(|_, _| {}),
+            router,
+            security_configuration,
+            static_file_server,
+        }
+    }
+}
+
+pub async fn start<T>(port: u16, config: RequestPipelineConfiguration<T>)
+where
     T: 'static + Sync + Send,
 {
     let listener: TcpListener;
@@ -41,28 +62,19 @@ pub async fn start<T>(
 
     let graceful_shutdown = GracefulShutdown::new();
 
+    let config = Arc::new(config);
+
     let mut signal = std::pin::pin!(shutdown_signal());
-
-    let interceptor = interceptor.unwrap_or(|_, _| {});
-
-    let router = Arc::new(router);
-
-    let security_configuration = Arc::new(security_configuration);
-
-    let static_file_server = Arc::new(static_file_server);
 
     loop {
         tokio::select! {
             Ok((stream, _addr)) = listener.accept() => {
                 let io = TokioIo::new(stream);
 
-                //todo unite all Arc<_> into a single Arc<ServerConfiguration> or similar to avoid
-                //cloning all of them. Then check if we can avoid the double cloning
-                let req_router = router.clone();
-                let security_configuration = security_configuration.clone();
-                let static_file_server = static_file_server.clone();
+                //Check if we can avoid the double cloning
+                let request_config = config.clone();
                 let svc = service_fn(move |request| {
-                    handle_request(interceptor, request, req_router.clone(), security_configuration.clone(), static_file_server.clone())
+                    handle_request(request, request_config.clone())
                 });
 
                 let conn = http.serve_connection(io, svc);
@@ -104,11 +116,8 @@ async fn shutdown_signal() {
 }
 
 async fn handle_request<T: Send + Sync + 'static>(
-    interceptor: fn(&Request, &Response),
     mut request: hyper::Request<hyper::body::Incoming>,
-    router: Arc<InternalRouter<T>>,
-    security_configuration: Arc<SecurityConfiguration>,
-    static_file_server: Arc<StaticFileServer>,
+    config: Arc<RequestPipelineConfiguration<T>>,
 ) -> Result<hyper::Response<Full<Bytes>>, ServerError> {
     let uri = request.uri().clone();
     let method = request.method().clone();
@@ -138,7 +147,7 @@ async fn handle_request<T: Send + Sync + 'static>(
 
     let mut internal_request = Request::new(method, uri, body_string, headers);
 
-    let auth_result = security_configuration.authorize(&internal_request);
+    let auth_result = config.security_configuration.authorize(&internal_request);
     if auth_result == AuthResult::Denied {
         return Ok(map_response(
             RequestError::with_message(ErrorType::Unauthorized, internal_request.uri.path())
@@ -149,15 +158,15 @@ async fn handle_request<T: Send + Sync + 'static>(
 
     // Try to get a response as a static file if enabled.
     // If that fails, we go on normally to fulfill the request with our router
-    if static_file_server.can_serve_request(&request) {
-        let static_file_response = serve_static_file(static_file_server, &request).await;
+    if config.static_file_server.can_serve_request(&request) {
+        let static_file_response = serve_static_file(&config.static_file_server, &request).await;
         if static_file_response.is_some() {
             return Ok(static_file_response.unwrap());
         }
     }
 
     //todo check if this clone can or should be removed
-    let router_result = router.run(internal_request.clone());
+    let router_result = config.router.run(internal_request.clone());
     if let Err(e) = router_result {
         return Ok(map_response(e.to_response())?);
     }
@@ -167,20 +176,26 @@ async fn handle_request<T: Send + Sync + 'static>(
     // This should be improved
     let (complete_request, response) = router_result.unwrap();
 
-    interceptor(&complete_request, &response);
+    (config.interceptor)(&complete_request, &response);
 
     Ok(map_response(response)?)
 }
 
 async fn serve_static_file(
-    static_file_server: Arc<StaticFileServer>,
+    static_file_server: &StaticFileServer,
     request: &hyper::Request<Incoming>,
 ) -> Option<hyper::Response<Full<Bytes>>> {
     let server = static_file_server.server.clone().unwrap();
 
     let new_uri = hyper::Uri::builder()
-            .path_and_query(request.uri().path().strip_prefix(&static_file_server.url_base_path).unwrap_or(""))
-            .build();
+        .path_and_query(
+            request
+                .uri()
+                .path()
+                .strip_prefix(&static_file_server.url_base_path)
+                .unwrap_or(""),
+        )
+        .build();
     if let Err(_) = new_uri {
         return None;
     }
@@ -236,9 +251,7 @@ fn map_response(response: Response) -> Result<hyper::Response<Full<Bytes>>, Serv
     }
 }
 
-fn clone_request(
-    request: hyper::Request<Incoming>,
-) -> hyper::Request<Incoming> {
+fn clone_request(request: hyper::Request<Incoming>) -> hyper::Request<Incoming> {
     let (head, body) = request.into_parts();
     hyper::Request::from_parts(head, body)
 }
