@@ -13,7 +13,7 @@
 
 
 **⚠️ This repository is still in a very early stage of development and is not ready for production. 
-All current features an APIs can be completely changed at any given time. ⚠️**
+All current features and APIs can be completely changed at any given time. ⚠️**
 
 
 Citrine is a Rust web framework that aims to make Rust web development as easy as possible,
