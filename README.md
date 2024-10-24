@@ -48,16 +48,15 @@ in this repository.
 ### Routing
 #### REST request handling and routing, using [Hyper](https://hyper.rs/) as the HTTP server
 
-Citrine allows for the definition of Routers, which will contain all the endpoints and 
-handlers for your application. Routers can be nested, providing flexibility when 
-designing your REST API.
+The Router struct will contain all the endpoints and handlers for your application. 
+Routers can be nested, providing flexibility when designing your REST API.
 
 ```
 // Application definition
 fn main() -> Result<(), ServerError> {
     ApplicationBuilder::<State>::new()
         ...
-        .add_routes(
+        .router(
             Router::new()
                 .add_route(Method::GET, "", base_path_controller)
                 .add_router(Router::base_path("/api").add_router(user_router()))
