@@ -62,7 +62,7 @@ pub struct ApplicationBuilder<T: Send + Sync + 'static> {
     port: u16,
     interceptor: Option<fn(&Request, &Response)>,
     state: T,
-    routes: Vec<Router<T>>,
+    router: Router<T>,
     load_templates: bool,
     configure_tera: fn(Tera) -> Tera,
     security_configuration: SecurityConfiguration,
@@ -113,8 +113,8 @@ where
         self
     }
 
-    pub fn add_routes(mut self, router: Router<T>) -> ApplicationBuilder<T> {
-        self.routes.push(router);
+    pub fn router(mut self, router: Router<T>) -> ApplicationBuilder<T> {
+        self.router = router;
         self
     }
 
@@ -142,7 +142,7 @@ where
     }
 
     pub async fn start(self) -> Result<(), ServerError> {
-        let internal_router_res = InternalRouter::from(self.routes, self.state);
+        let internal_router_res = InternalRouter::from(self.router, self.state);
         if let Err(e) = internal_router_res {
             return Err(ServerError::from(e));
         }
@@ -172,7 +172,7 @@ where
             version: "0.0.1".to_string(),
             port: 8080,
             interceptor: None,
-            routes: vec![],
+            router: Router::new(),
             state: T::default(),
             load_templates: false,
             configure_tera: |t| t,

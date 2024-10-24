@@ -77,7 +77,7 @@ async fn main() -> Result<(), ServerError> {
                 // the requests that do not match the rules above
                 .add_rule(MethodMatcher::All, "/*", SecurityAction::Allow),
         )
-        .add_routes(
+        .router(
             Router::new()
                 .add_route(Method::GET, "", base_path_controller)
                 .add_router(Router::base_path("/api").add_router(user_router()))

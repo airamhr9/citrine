@@ -115,15 +115,13 @@ where
         }
     }
 
-    pub fn from(routers: Vec<Router<T>>, state: T) -> Result<InternalRouter<T>, ServerError> {
+    pub fn from(router: Router<T>, state: T) -> Result<InternalRouter<T>, ServerError> {
         let mut internal_router = InternalRouter::new_stateful(state);
 
-        for router in routers {
-            for route in router.routes {
-                if let Err(e) = internal_router.add_route(route.method, &route.path, route.handler)
-                {
-                    return Err(e);
-                }
+        for route in router.routes {
+            if let Err(e) = internal_router.add_route(route.method, &route.path, route.handler)
+            {
+                return Err(e);
             }
         }
 
