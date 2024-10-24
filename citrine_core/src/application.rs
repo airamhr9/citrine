@@ -18,7 +18,7 @@ struct Application<T: Send + Sync + 'static> {
     name: String,
     version: String,
     port: u16,
-    interceptor: Option<fn(&Request, &Response)>,
+    interceptor: fn(&Request, &Response),
     router: InternalRouter<T>,
     load_templates: bool,
     configure_tera: fn(Tera) -> Tera,
@@ -60,7 +60,7 @@ pub struct ApplicationBuilder<T: Send + Sync + 'static> {
     name: String,
     version: String,
     port: u16,
-    interceptor: Option<fn(&Request, &Response)>,
+    interceptor: fn(&Request, &Response),
     state: T,
     router: Router<T>,
     load_templates: bool,
@@ -96,7 +96,7 @@ where
     }
 
     pub fn interceptor(mut self, interceptor: fn(&Request, &Response)) -> ApplicationBuilder<T> {
-        self.interceptor = Some(interceptor);
+        self.interceptor = interceptor;
         self
     }
 
@@ -171,7 +171,7 @@ where
             name: "Citrine Application".to_string(),
             version: "0.0.1".to_string(),
             port: 8080,
-            interceptor: None,
+            interceptor: |_, _| {},
             router: Router::new(),
             state: T::default(),
             load_templates: false,

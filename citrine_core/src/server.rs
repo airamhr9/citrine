@@ -30,13 +30,13 @@ where
     T: 'static + Send + Sync,
 {
     pub fn new(
-        interceptor: Option<fn(&Request, &Response)>,
+        interceptor: fn(&Request, &Response),
         router: InternalRouter<T>,
         security_configuration: SecurityConfiguration,
         static_file_server: StaticFileServer,
     ) -> Self {
         RequestPipelineConfiguration {
-            interceptor: interceptor.unwrap_or(|_, _| {}),
+            interceptor,
             router,
             security_configuration,
             static_file_server,
@@ -251,7 +251,3 @@ fn map_response(response: Response) -> Result<hyper::Response<Full<Bytes>>, Serv
     }
 }
 
-fn clone_request(request: hyper::Request<Incoming>) -> hyper::Request<Incoming> {
-    let (head, body) = request.into_parts();
-    hyper::Request::from_parts(head, body)
-}
