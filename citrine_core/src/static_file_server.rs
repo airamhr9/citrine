@@ -1,33 +1,56 @@
+use std::path::PathBuf;
+
 use http_body_util::{BodyExt, Full};
 use hyper::{body::Bytes, Method, StatusCode};
 use hyper_staticfile::Static;
 
 use crate::request::RequestMetadata;
 
+/// Contains a map of folders, with the key being the base_url and 
 #[derive(Default, Clone)]
 pub struct StaticFileServer {
-    pub url_base_path: String,
-    server: Option<Static>,
+    folders: Vec<ServedFolder>
 }
 
 impl StaticFileServer {
-    pub fn new(url_base_path: &str, server: Static) -> Self {
-        StaticFileServer {
-            url_base_path: url_base_path.to_string(),
-            server: Some(server),
-        }
+    pub fn new() -> Self {
+        StaticFileServer { folders: vec![] }
+    }
+
+    pub fn serve_folder(mut self, url_base_path: &str, folder: PathBuf) -> Self {
+        self.folders.push(ServedFolder::new(url_base_path, folder));
+        self
     }
 
     pub async fn try_serve(&self, request: &RequestMetadata) -> Option<hyper::Response<Full<Bytes>>> {
-        if self.server.is_none()
-            || request.method != Method::GET
-            || !request.uri.path().starts_with(&self.url_base_path)
-        {
+        if request.method != Method::GET {
             return None;
         }
 
-        let server = self.server.clone().unwrap();
+        for folder in self.folders.iter() {
+            if request.uri.path().starts_with(&folder.url_base_path) {
+                if let Some(response) = folder.try_serve(request).await {
+                    return Some(response);
+                }
+            }
+        }
 
+        None
+    }
+}
+
+#[derive(Clone)]
+pub struct ServedFolder {
+    url_base_path: String,
+    server: Static
+}
+
+impl ServedFolder {
+    pub fn new(url_base_path: &str, folder: PathBuf) -> Self {
+        ServedFolder { url_base_path: url_base_path.to_string(), server: Static::new(folder) }
+    }
+
+    pub async fn try_serve(&self, request: &RequestMetadata) -> Option<hyper::Response<Full<Bytes>>> {
         let new_uri = hyper::Uri::builder()
             .path_and_query(
                 request
@@ -49,7 +72,7 @@ impl StaticFileServer {
             return None;
         }
 
-        let static_file_result = server.serve(static_file_request.unwrap()).await;
+        let static_file_result = self.server.clone().serve(static_file_request.unwrap()).await;
         if static_file_result.is_err() {
             return None;
         }
@@ -73,3 +96,4 @@ impl StaticFileServer {
         Some(hyper::Response::from_parts(parts, full_body))
     }
 }
+

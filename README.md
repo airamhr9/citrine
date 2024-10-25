@@ -92,7 +92,12 @@ fn main() -> Result<(), ServerError> {
     ApplicationBuilder::<State>::new()
         ...
         // we serve all of the files under the ./public folder in the base path of our application
-        .serve_static_files("/", PathBuf::from("./public"))
+        // and all the files under ./static_views in the path /static
+        .serve_static_files(
+            StaticFileServer::new()
+                .serve_folder("/", PathBuf::from("./public"))
+                .serve_folder("/static", PathBuf::from("./static_views")),
+        )
         .start()
         .await
 }

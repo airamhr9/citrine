@@ -9,6 +9,7 @@ use citrine_core::response::Response;
 use citrine_core::security::{
     Authenticator, JWTConfiguration, MethodMatcher, SecurityAction, SecurityConfiguration,
 };
+use citrine_core::static_file_server::StaticFileServer;
 use citrine_core::{
     self, tera, tokio, DefaultErrorResponseBody, Method, RequestError, Router, ServerError,
     StatusCode,
@@ -56,7 +57,12 @@ async fn main() -> Result<(), ServerError> {
             )
         })
         // we serve all of the files under the ./public folder in the base path of our application
-        .serve_static_files("/", PathBuf::from("./public"))
+        // and all the files under ./static_views in the path /static
+        .serve_static_files(
+            StaticFileServer::new()
+                .serve_folder("/", PathBuf::from("./public"))
+                .serve_folder("/static", PathBuf::from("./static_views")),
+        )
         .configure_tera(|mut tera| {
             tera.register_filter("url_encode", url_encode_filter);
             tera
@@ -80,7 +86,7 @@ async fn main() -> Result<(), ServerError> {
         .router(
             Router::new()
                 .add_route(Method::GET, "", base_path_controller)
-                .add_router(Router::base_path("/api").add_router(user_router()))
+                .add_router(Router::base_path("/api").add_router(user_router())),
         )
         .start()
         .await

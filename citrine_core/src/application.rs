@@ -1,6 +1,3 @@
-use std::path::PathBuf;
-
-use hyper_staticfile::Static;
 use log::info;
 use tera::Tera;
 
@@ -132,8 +129,8 @@ where
         self
     }
 
-    pub fn serve_static_files(mut self, url_base_path: &str, directory: PathBuf) -> Self {
-        self.static_file_server = StaticFileServer::new(url_base_path, Static::new(directory));
+    pub fn serve_static_files(mut self, static_file_server: StaticFileServer) -> Self {
+        self.static_file_server = static_file_server;
         self
     }
 
