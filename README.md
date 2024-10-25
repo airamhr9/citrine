@@ -41,7 +41,7 @@ This is at the moment a personal learning project.
 
 </div>
 
-All the examples below are taken directly from the [main.rs](https://github.com/airamhr9/citrine/tree/main/sample/src)
+All the examples below are taken directly from the [main.rs](https://github.com/airamhr9/citrine/tree/main/sample/src/main.rs)
 file in the sample directory. New features and changes will be displayed in that or new sample projects 
 in this repository.
 
