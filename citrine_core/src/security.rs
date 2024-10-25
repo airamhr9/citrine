@@ -46,6 +46,12 @@ impl SecurityConfiguration {
     }
 }
 
+impl Default for SecurityConfiguration {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 struct SecurityRule {
     request_matcher: RequestMatcher,
     action: SecurityAction,
@@ -115,7 +121,7 @@ impl RequestMatcher {
         match &self.method_matcher {
             MethodMatcher::All => true,
             MethodMatcher::One(m) => method == m,
-            MethodMatcher::Multiple(methods) => methods.contains(&method),
+            MethodMatcher::Multiple(methods) => methods.contains(method),
         }
     }
 }

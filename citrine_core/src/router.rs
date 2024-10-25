@@ -13,32 +13,24 @@ use crate::response::Response;
 
 pub type RequestHandler<T> = fn(Arc<T>, Request) -> Response;
 
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub struct StaticFileServer {
     pub url_base_path: String,
-    pub server: Option<Static>
+    pub server: Option<Static>,
 }
 
 impl StaticFileServer {
     pub fn new(url_base_path: &str, server: Static) -> Self {
         StaticFileServer {
             url_base_path: url_base_path.to_string(),
-            server: Some(server)
+            server: Some(server),
         }
     }
 
     pub fn can_serve_request(&self, request: &hyper::Request<Incoming>) -> bool {
-        self.server.is_some() && request.method() == Method::GET
+        self.server.is_some()
+            && request.method() == Method::GET
             && request.uri().path().starts_with(&self.url_base_path)
-    }
-}
-
-impl Default for StaticFileServer {
-    fn default() -> Self {
-        StaticFileServer {
-            url_base_path: String::new(),
-            server: None
-        }
     }
 }
 
@@ -58,10 +50,10 @@ where
     T: Send + Sync + 'static,
 {
     pub fn new() -> Self {
-        return Router {
+        Router {
             base_path: String::new(),
             routes: Vec::new(),
-        };
+        }
     }
 
     pub fn add_router(mut self, nested: Router<T>) -> Self {
@@ -73,15 +65,15 @@ where
     }
 
     pub fn base_path(base_path: &str) -> Self {
-        return Router {
+        Router {
             base_path: base_path.to_string(),
             routes: Vec::new(),
-        };
+        }
     }
 
     pub fn add_route(mut self, method: Method, path: &str, handler: RequestHandler<T>) -> Self {
         let mut real_path = format!("{}{}", self.base_path, path);
-        if real_path == "" {
+        if real_path.is_empty() {
             real_path = "/".to_string();
         }
         self.routes.push(Route {
@@ -90,6 +82,15 @@ where
             handler,
         });
         self
+    }
+}
+
+impl<T> Default for Router<T>
+where
+    T: Send + Sync + 'static,
+{
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -119,10 +120,7 @@ where
         let mut internal_router = InternalRouter::new_stateful(state);
 
         for route in router.routes {
-            if let Err(e) = internal_router.add_route(route.method, &route.path, route.handler)
-            {
-                return Err(e);
-            }
+            internal_router.add_route(route.method, &route.path, route.handler)?;
         }
 
         Ok(internal_router)
@@ -148,8 +146,7 @@ where
             let key: String;
             let variable: Option<String>;
 
-            if elem.starts_with(":") {
-                // variable path element
+            if let Some(variable_name) = elem.strip_prefix(":") {
                 if elem.len() <= 1 {
                     return Err(ServerError::from(format!(
                         "Malformed path: Variable without name in path {}",
@@ -159,7 +156,7 @@ where
 
                 //todo optimize this
                 key = "VARIABLE".to_string();
-                variable = Some(elem[1..].to_string());
+                variable = Some(variable_name.to_string())
             } else {
                 // normal path element
                 key = elem.to_string();
@@ -263,12 +260,11 @@ mod tests {
 
     use super::*;
 
-    struct StateTest {
-    }
+    struct StateTest {}
 
     impl Default for StateTest {
         fn default() -> Self {
-            StateTest { }
+            StateTest {}
         }
     }
 

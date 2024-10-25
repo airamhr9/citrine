@@ -73,12 +73,12 @@ fn base_path_controller(state: Arc<State>, _: Request) -> Response {
 
 // Router definition
 fn user_router() -> Router<State> {
-    return Router::base_path("/users")
+    Router::base_path("/users")
         .add_route(Method::GET, "", find_all_users_controller)
         .add_route(Method::GET, "/:id", find_by_id_controller)
         .add_route(Method::DELETE, "/:id", delete_by_id_controller)
         .add_route(Method::PUT, "/:id", update_user_controler)
-        .add_route(Method::POST, "", create_user_controler);
+        .add_route(Method::POST, "", create_user_controler)
 }
 ```
 

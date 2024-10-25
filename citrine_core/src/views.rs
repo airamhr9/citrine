@@ -10,10 +10,8 @@ static CALLBACK: OnceCell<fn(Tera) -> Tera> = OnceCell::new();
 pub fn init_templates(configure_tera: fn(Tera) -> Tera) -> Result<(), tera::Error>
 {
     //only for reloading on debug
-    if cfg!(debug_assertions) {
-        if let Err(_) = CALLBACK.set(configure_tera) {
-            error!("Could not save templates configuration for template reload. Custom template functions may not work");
-        }
+    if cfg!(debug_assertions) && CALLBACK.set(configure_tera).is_err() {
+        error!("Could not save templates configuration for template reload. Custom template functions may not work");
     }
 
     let mut tera = load_tera();
@@ -26,7 +24,7 @@ pub fn init_templates(configure_tera: fn(Tera) -> Tera) -> Result<(), tera::Erro
 
     debug!("Tera templates initialized");
 
-    if let Err(_) = TEMPLATES.set(tera) {
+    if TEMPLATES.set(tera).is_err() {
         Err(tera::Error::msg(
             "Could not initialize template engine configuration",
         ))
@@ -49,7 +47,7 @@ fn load_tera() -> Tera {
 }
 
 pub fn render_view(template_name: &str, data: &impl Serialize) -> Result<String, tera::Error> {
-    let value = serde_json::to_value(&data)?;
+    let value = serde_json::to_value(data)?;
     if let Value::Array(_) = value {
         let msg = "Can't build a template context from a top level array. Make sure the data can be serialized as a JSON Object";
         error!("{}", msg);

@@ -204,12 +204,12 @@ fn base_path_controller(state: Arc<State>, _: Request) -> Response {
  * */
 
 fn user_router() -> Router<State> {
-    return Router::base_path("/users")
+    Router::base_path("/users")
         .add_route(Method::GET, "", find_all_users_controller)
         .add_route(Method::GET, "/:id", find_by_id_controller)
         .add_route(Method::DELETE, "/:id", delete_by_id_controller)
         .add_route(Method::PUT, "/:id", update_user_controler)
-        .add_route(Method::POST, "", create_user_controler);
+        .add_route(Method::POST, "", create_user_controler)
 }
 
 /*
@@ -302,16 +302,16 @@ fn find_all_users(db: &mut DbConnection) -> Vec<User> {
         .query_parse(&query!("select all * from sample.users limit ?", 1000u64))
         .unwrap();
 
-    return users.to_vec();
+    users.to_vec()
 }
 
 fn find_by_id(id: &String, db: &mut DbConnection) -> Option<User> {
-    let user: Result<User, _> =
+    let user_res: Result<User, _> =
         db.query_parse(&query!("select * from sample.users where id = ?", id));
-    if user.is_err() {
-        None
+    if let Ok(user) = user_res {
+        Some(user)
     } else {
-        Some(user.unwrap())
+        None
     }
 }
 

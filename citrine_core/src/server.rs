@@ -127,10 +127,9 @@ async fn handle_request<T: Send + Sync + 'static>(
     // check if the map_response error should be explicitly handled
     let req_body_res = request.body_mut().collect().await;
     if let Err(e) = req_body_res {
-        return Ok(map_response(
+        return map_response(
             RequestError::with_message(ErrorType::RequestBodyUnreadable, &e.to_string())
-                .to_response(),
-        )?);
+                .to_response());
     }
     let mut body_string = String::new();
     if let Err(e) = req_body_res
@@ -139,20 +138,18 @@ async fn handle_request<T: Send + Sync + 'static>(
         .reader()
         .read_to_string(&mut body_string)
     {
-        return Ok(map_response(
+        return map_response(
             RequestError::with_message(ErrorType::RequestBodyUnreadable, &e.to_string())
-                .to_response(),
-        )?);
+                .to_response());
     }
 
     let mut internal_request = Request::new(method, uri, body_string, headers);
 
     let auth_result = config.security_configuration.authorize(&internal_request);
     if auth_result == AuthResult::Denied {
-        return Ok(map_response(
+        return map_response(
             RequestError::with_message(ErrorType::Unauthorized, internal_request.uri.path())
-                .to_response(),
-        )?);
+                .to_response());
     }
     internal_request.auth_result = auth_result;
 
@@ -160,15 +157,15 @@ async fn handle_request<T: Send + Sync + 'static>(
     // If that fails, we go on normally to fulfill the request with our router
     if config.static_file_server.can_serve_request(&request) {
         let static_file_response = serve_static_file(&config.static_file_server, &request).await;
-        if static_file_response.is_some() {
-            return Ok(static_file_response.unwrap());
+        if let Some(response) = static_file_response {
+            return Ok(response);
         }
     }
 
     //todo check if this clone can or should be removed
     let router_result = config.router.run(internal_request.clone());
     if let Err(e) = router_result {
-        return Ok(map_response(e.to_response())?);
+        return map_response(e.to_response());
     }
 
     // we return the request from the run function because it will be different from the one in the
@@ -178,7 +175,7 @@ async fn handle_request<T: Send + Sync + 'static>(
 
     (config.interceptor)(&complete_request, &response);
 
-    Ok(map_response(response)?)
+    map_response(response)
 }
 
 async fn serve_static_file(
@@ -196,7 +193,7 @@ async fn serve_static_file(
                 .unwrap_or(""),
         )
         .build();
-    if let Err(_) = new_uri {
+    if new_uri.is_err() {
         return None;
     }
 
@@ -204,12 +201,12 @@ async fn serve_static_file(
         .method(Method::GET)
         .uri(new_uri.unwrap())
         .body(());
-    if let Err(_) = static_file_request {
+    if static_file_request.is_err() {
         return None;
     }
 
     let static_file_result = server.serve(static_file_request.unwrap()).await;
-    if let Err(_) = static_file_result {
+    if static_file_result.is_err() {
         return None;
     }
     let static_file_response = static_file_result.unwrap();

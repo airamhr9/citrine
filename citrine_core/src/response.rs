@@ -75,7 +75,7 @@ impl Response {
     }
 
     pub fn get_status(&self) -> StatusCode {
-        self.status.clone()
+        self.status
     }
 
     pub fn get_body_with_ownership(self) -> Option<Full<Bytes>> {
