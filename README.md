@@ -51,7 +51,7 @@ in this repository.
 The Router struct will contain all the endpoints and handlers for your application. 
 Routers can be nested, providing flexibility when designing your REST API.
 
-```
+```rust
 // Application definition
 fn main() -> Result<(), ServerError> {
     ApplicationBuilder::<State>::new()
@@ -87,7 +87,7 @@ fn user_router() -> Router<State> {
 We can serve any folder as static files in any path of our server. This allows us to expose
 basic files like a favicon.ico or complete Front-End applications statically compiled.
 
-```
+```rust
 fn main() -> Result<(), ServerError> {
     ApplicationBuilder::<State>::new()
         ...
@@ -112,7 +112,7 @@ It automatically loads the templates available in the "templates" folder at the 
 but this will be configurable via environment variables. When running with debug assertions,
 the templates will be automatically reloaded when every request to a template endpoint is made, making development easier and faster.
 
-```
+```rust
 // Application definition
 fn main() -> Result<(), ServerError> {
     ApplicationBuilder::<State>::new()
@@ -159,7 +159,7 @@ and currently offers suppport for JWT or a authentication method, with other opt
 With the current API, it provides the flexibility of choosing different authentication methods 
 for any request or just assigning a default behaviour for all.
 
-```
+```rust
 fn main() -> Result<(), ServerError> {
     ApplicationBuilder::<State>::new()
         ...
@@ -191,7 +191,7 @@ after every request, giving read access to the request and response. In the futu
 defining chained middleware functions to interact with a request before it reaches a request handler
 will be included.
 
-```
+```rust
 fn main() -> Result<(), ServerError> {
     ApplicationBuilder::<State>::new()
         ...
