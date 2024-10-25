@@ -90,3 +90,25 @@ impl Response {
         &self.headers
     }
 }
+
+impl TryFrom<Response> for hyper::Response<Full<Bytes>> {
+    type Error = crate::ServerError;
+
+    fn try_from(response: Response) -> Result<Self, Self::Error> {
+        let status_response = response.get_status();
+        let mut response_builder = hyper::Response::builder().status(status_response);
+
+        for (key, value) in response.get_headers().iter() {
+            response_builder = response_builder.header(key, value);
+        }
+
+        let response_body = response
+            .get_body_with_ownership()
+            .unwrap_or(Full::new(Bytes::new()));
+
+        match response_builder.body(response_body) {
+            Ok(response) => Ok(response),
+            Err(e) => Err(crate::ServerError::from(e)),
+        }
+    }
+}

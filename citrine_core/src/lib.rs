@@ -15,5 +15,6 @@ pub mod security;
 pub mod request;
 pub mod response;
 pub mod application;
+pub mod static_file_server;
 
 extern crate lazy_static;

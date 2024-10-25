@@ -1,6 +1,4 @@
-use hyper::body::Incoming;
 use hyper::Method;
-use hyper_staticfile::Static;
 use log::debug;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -12,27 +10,6 @@ use crate::request::Request;
 use crate::response::Response;
 
 pub type RequestHandler<T> = fn(Arc<T>, Request) -> Response;
-
-#[derive(Default, Clone)]
-pub struct StaticFileServer {
-    pub url_base_path: String,
-    pub server: Option<Static>,
-}
-
-impl StaticFileServer {
-    pub fn new(url_base_path: &str, server: Static) -> Self {
-        StaticFileServer {
-            url_base_path: url_base_path.to_string(),
-            server: Some(server),
-        }
-    }
-
-    pub fn can_serve_request(&self, request: &hyper::Request<Incoming>) -> bool {
-        self.server.is_some()
-            && request.method() == Method::GET
-            && request.uri().path().starts_with(&self.url_base_path)
-    }
-}
 
 pub struct Router<T: Send + Sync + 'static> {
     pub base_path: String,
@@ -258,6 +235,8 @@ where
 mod tests {
     use hyper::{HeaderMap, StatusCode, Uri};
 
+    use crate::security::AuthResult;
+
     use super::*;
 
     struct StateTest {}
@@ -296,13 +275,13 @@ mod tests {
         }
 
         let uri1 = Uri::from_static("http://domain.com/hello");
-        let req1: Request = Request::new(Method::GET, uri1, "Body".to_string(), HeaderMap::new());
+        let req1: Request = Request::new(Method::GET, uri1, "Body".to_string(), HeaderMap::new(), AuthResult::Allowed);
         let uri2 = Uri::from_static("http://domain.com/hello/other");
-        let req2: Request = Request::new(Method::POST, uri2, "Body".to_string(), HeaderMap::new());
+        let req2: Request = Request::new(Method::POST, uri2, "Body".to_string(), HeaderMap::new(), AuthResult::Allowed);
         let uri3 = Uri::from_static("http://domain.com/hi/other");
-        let req3: Request = Request::new(Method::GET, uri3, "Body".to_string(), HeaderMap::new());
+        let req3: Request = Request::new(Method::GET, uri3, "Body".to_string(), HeaderMap::new(), AuthResult::Allowed);
         let uri4 = Uri::from_static("http://domain.com/hi/other");
-        let req4: Request = Request::new(Method::PUT, uri4, "Body".to_string(), HeaderMap::new());
+        let req4: Request = Request::new(Method::PUT, uri4, "Body".to_string(), HeaderMap::new(), AuthResult::Allowed);
 
         let _ = router.run(req1);
         let _ = router.run(req2);

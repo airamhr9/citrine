@@ -8,7 +8,7 @@ use log::debug;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-use crate::request::Request;
+use crate::request::RequestMetadata;
 
 pub struct SecurityConfiguration {
     rules: Vec<SecurityRule>,
@@ -32,7 +32,7 @@ impl SecurityConfiguration {
         self
     }
 
-    pub fn authorize(&self, request: &Request) -> AuthResult {
+    pub fn authorize(&self, request: &RequestMetadata) -> AuthResult {
         debug!("Authorizing request {} {}", request.method, request.uri);
         for rule in self.rules.iter() {
             if rule.matches(request)  {
@@ -65,11 +65,11 @@ impl SecurityRule {
         }
     }
 
-    pub fn matches(&self, request: &Request) -> bool {
+    pub fn matches(&self, request: &RequestMetadata) -> bool {
         self.request_matcher.matches(request)
     }
 
-    pub fn get_auth_result(&self, request: &Request) -> AuthResult {
+    pub fn get_auth_result(&self, request: &RequestMetadata) -> AuthResult {
         self.action.apply(request)
     }
 }
@@ -81,7 +81,7 @@ pub enum SecurityAction {
 }
 
 impl SecurityAction {
-    pub fn apply(&self, request: &Request) -> AuthResult {
+    pub fn apply(&self, request: &RequestMetadata) -> AuthResult {
         match self {
             Self::Deny => AuthResult::Denied,
             Self::Allow => AuthResult::Allowed,
@@ -113,7 +113,7 @@ impl RequestMatcher {
         }
     }
 
-    pub fn matches(&self, request: &Request) -> bool {
+    pub fn matches(&self, request: &RequestMetadata) -> bool {
         self.matches_method(&request.method) && self.path_regex.is_match(request.uri.path())
     }
 
@@ -135,7 +135,7 @@ pub enum Authenticator {
 }
 
 impl Authenticator {
-    pub fn authenticate(&self, request: &Request) -> AuthResult {
+    pub fn authenticate(&self, request: &RequestMetadata) -> AuthResult {
         let authorization_header = request.headers.get(AUTHORIZATION);
         if authorization_header.is_none() {
             debug!("No Authorization header provided. Denying request");

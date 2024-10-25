@@ -1,22 +1,20 @@
-use http_body_util::{BodyExt, Full};
-use hyper::body::{Buf, Incoming};
+use http_body_util::Full;
 use hyper::service::service_fn;
 use hyper::{body::Bytes, server::conn::http1};
-use hyper::{Method, StatusCode};
 use hyper_util::rt::TokioIo;
 use hyper_util::server::graceful::GracefulShutdown;
 use log::{error, info};
-use std::io::Read;
 use std::net::SocketAddr;
 use std::process::exit;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
 use crate::error::{ErrorType, RequestError, ServerError};
-use crate::request::Request;
+use crate::request::{Request, RequestMetadata};
 use crate::response::Response;
-use crate::router::{InternalRouter, StaticFileServer};
+use crate::router::InternalRouter;
 use crate::security::{AuthResult, SecurityConfiguration};
+use crate::static_file_server::StaticFileServer;
 
 pub struct RequestPipelineConfiguration<T: 'static + Send + Sync> {
     interceptor: fn(&Request, &Response),
@@ -116,135 +114,46 @@ async fn shutdown_signal() {
 }
 
 async fn handle_request<T: Send + Sync + 'static>(
-    mut request: hyper::Request<hyper::body::Incoming>,
+    request: hyper::Request<hyper::body::Incoming>,
     config: Arc<RequestPipelineConfiguration<T>>,
 ) -> Result<hyper::Response<Full<Bytes>>, ServerError> {
-    let uri = request.uri().clone();
-    let method = request.method().clone();
-    let headers = request.headers().clone();
+    let request_metadata: RequestMetadata = request.into();
 
-    // return default error response if request body cant be read
-    // check if the map_response error should be explicitly handled
-    let req_body_res = request.body_mut().collect().await;
-    if let Err(e) = req_body_res {
-        return map_response(
-            RequestError::with_message(ErrorType::RequestBodyUnreadable, &e.to_string())
-                .to_response());
-    }
-    let mut body_string = String::new();
-    if let Err(e) = req_body_res
-        .unwrap()
-        .aggregate()
-        .reader()
-        .read_to_string(&mut body_string)
-    {
-        return map_response(
-            RequestError::with_message(ErrorType::RequestBodyUnreadable, &e.to_string())
-                .to_response());
-    }
-
-    let mut internal_request = Request::new(method, uri, body_string, headers);
-
-    let auth_result = config.security_configuration.authorize(&internal_request);
+    // First, we check if the request is authorized
+    let auth_result = config.security_configuration.authorize(&request_metadata);
     if auth_result == AuthResult::Denied {
-        return map_response(
-            RequestError::with_message(ErrorType::Unauthorized, internal_request.uri.path())
-                .to_response());
+        return RequestError::with_message(ErrorType::Unauthorized, request_metadata.uri.path())
+            .to_response()
+            .try_into();
     }
-    internal_request.auth_result = auth_result;
 
-    // Try to get a response as a static file if enabled.
+    // Second, we try to serve the request as a static file request
     // If that fails, we go on normally to fulfill the request with our router
-    if config.static_file_server.can_serve_request(&request) {
-        let static_file_response = serve_static_file(&config.static_file_server, &request).await;
-        if let Some(response) = static_file_response {
-            return Ok(response);
-        }
+    // Consider adding support for logging this types of requests
+    if let Some(response) = config.static_file_server.try_serve(&request_metadata).await {
+        return Ok(response);
     }
 
-    //todo check if this clone can or should be removed
-    let router_result = config.router.run(internal_request.clone());
+    // Third, map the request_metadata into the request object that will be user visible
+    let internal_request_res = Request::from_metadata_and_auth(request_metadata, auth_result).await;
+    if let Err(e) = internal_request_res {
+        return RequestError::with_message(ErrorType::RequestBodyUnreadable, &e.to_string())
+            .to_response()
+            .try_into();
+    }
+    let internal_request = internal_request_res.unwrap();
+
+    // Fourth, use the router to get the REST request result
+    let router_result = config.router.run(internal_request);
     if let Err(e) = router_result {
-        return map_response(e.to_response());
+        return e.to_response().try_into();
     }
+    // we return the request from the run function because it will be different from the one we
+    // input, as the path variables are matched inside.
+    let (internal_request, response) = router_result.unwrap();
 
-    // we return the request from the run function because it will be different from the one in the
-    // input, because the path variables are matched inside.
-    // This should be improved
-    let (complete_request, response) = router_result.unwrap();
+    // Lastly, execute the configured interceptor
+    (config.interceptor)(&internal_request, &response);
 
-    (config.interceptor)(&complete_request, &response);
-
-    map_response(response)
+    response.try_into()
 }
-
-async fn serve_static_file(
-    static_file_server: &StaticFileServer,
-    request: &hyper::Request<Incoming>,
-) -> Option<hyper::Response<Full<Bytes>>> {
-    let server = static_file_server.server.clone().unwrap();
-
-    let new_uri = hyper::Uri::builder()
-        .path_and_query(
-            request
-                .uri()
-                .path()
-                .strip_prefix(&static_file_server.url_base_path)
-                .unwrap_or(""),
-        )
-        .build();
-    if new_uri.is_err() {
-        return None;
-    }
-
-    let static_file_request = hyper::Request::builder()
-        .method(Method::GET)
-        .uri(new_uri.unwrap())
-        .body(());
-    if static_file_request.is_err() {
-        return None;
-    }
-
-    let static_file_result = server.serve(static_file_request.unwrap()).await;
-    if static_file_result.is_err() {
-        return None;
-    }
-    let static_file_response = static_file_result.unwrap();
-    let (parts, body) = static_file_response.into_parts();
-
-    if parts.status != StatusCode::OK {
-        return None;
-    }
-
-    // Convert the body to Bytes
-    let body_bytes_res = body.collect().await;
-    if body_bytes_res.is_err() {
-        return None;
-    }
-    let body_bytes = body_bytes_res.unwrap();
-
-    // Convert the Bytes into a Full<Bytes>
-    let full_body = Full::from(body_bytes.to_bytes());
-
-    Some(hyper::Response::from_parts(parts, full_body))
-}
-
-// map our internal "user friendly" response to hyper's response
-fn map_response(response: Response) -> Result<hyper::Response<Full<Bytes>>, ServerError> {
-    let status_response = response.get_status();
-    let mut response_builder = hyper::Response::builder().status(status_response);
-
-    for (key, value) in response.get_headers().iter() {
-        response_builder = response_builder.header(key, value);
-    }
-
-    let response_body = response
-        .get_body_with_ownership()
-        .unwrap_or(Full::new(Bytes::new()));
-
-    match response_builder.body(response_body) {
-        Ok(response) => Ok(response),
-        Err(e) => Err(ServerError::from(e)),
-    }
-}
-
