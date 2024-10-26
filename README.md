@@ -54,7 +54,7 @@ Routers can be nested, providing flexibility when designing your REST API.
 ```rust
 // Application definition
 fn main() -> Result<(), ServerError> {
-    ApplicationBuilder::<State>::new()
+    Application::<State>::builder()
         ...
         .router(
             Router::new()
@@ -89,7 +89,7 @@ basic files like a favicon.ico or complete Front-End applications statically com
 
 ```rust
 fn main() -> Result<(), ServerError> {
-    ApplicationBuilder::<State>::new()
+    Application::<State>::builder()
         ...
         // we serve all of the files under the ./public folder in the base path of our 
         // application and all the files under ./static_views in the path /static
@@ -115,7 +115,7 @@ the templates will be automatically reloaded when every request to a template en
 ```rust
 // Application definition
 fn main() -> Result<(), ServerError> {
-    ApplicationBuilder::<State>::new()
+    Application::<State>::builder()
         ...
         .configure_tera(|mut tera| {
             tera.register_filter("url_encode", url_encode_filter);
@@ -161,7 +161,7 @@ for any request or just assigning a default behaviour for all.
 
 ```rust
 fn main() -> Result<(), ServerError> {
-    ApplicationBuilder::<State>::new()
+    Application::<State>::builder()
         ...
         .security_configuration(
             SecurityConfiguration::new()
@@ -193,7 +193,7 @@ will be included.
 
 ```rust
 fn main() -> Result<(), ServerError> {
-    ApplicationBuilder::<State>::new()
+    Application::<State>::builder()
         ...
         .interceptor(|request, response| {
             let user = if let Some(claims) = request.auth_result.get_claims() {
