@@ -91,8 +91,8 @@ basic files like a favicon.ico or complete Front-End applications statically com
 fn main() -> Result<(), ServerError> {
     ApplicationBuilder::<State>::new()
         ...
-        // we serve all of the files under the ./public folder in the base path of our application
-        // and all the files under ./static_views in the path /static
+        // we serve all of the files under the ./public folder in the base path of our 
+        // application and all the files under ./static_views in the path /static
         .serve_static_files(
             StaticFileServer::new()
                 .serve_folder("/", PathBuf::from("./public"))

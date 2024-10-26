@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use citrine_core::application::ApplicationBuilder;
+use citrine_core::application::Application;
 use citrine_core::jsonwebtoken::Algorithm;
 use citrine_core::request::Request;
 use citrine_core::response::Response;
@@ -33,7 +33,7 @@ async fn main() -> Result<(), ServerError> {
     // This is a dummy JWT secret key for testing purposes. You should generate one and use it via environment variables
     let jwt_secret = "NTNv7j0TuYARvmNMmWXo6fKvM4o6nv/aUi9ryX38ZH+L1bkrnD1ObOQ8JAUmHCBq7Iy7otZcyAagBLHVKvvYaIpmMuxmARQ97jUVG16Jkpkp1wXOPsrF9zwew6TpczyHkHgX5EuLg2MeBuiT/qJACs1J0apruOOJCg/gOtkjB4c=";
 
-    ApplicationBuilder::<State>::new()
+    Application::<State>::builder()
         .name("Citrine sample application")
         .version("0.0.1")
         .port(8080)
@@ -56,8 +56,8 @@ async fn main() -> Result<(), ServerError> {
                 response.status,
             )
         })
-        // we serve all of the files under the ./public folder in the base path of our application
-        // and all the files under ./static_views in the path /static
+        // We serve all of the files under the ./public folder in the base path of our 
+        // application and all the files under ./static_views in the path /static
         .serve_static_files(
             StaticFileServer::new()
                 .serve_folder("/", PathBuf::from("./public"))

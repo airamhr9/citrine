@@ -72,8 +72,7 @@ where
 }
 
 pub struct InternalRouter<T: Send + Sync + 'static> {
-    routes: HashMap<Method, HashMap<String, RouterNode<T>>>,
-    state: Arc<T>,
+    routes: HashMap<Method, HashMap<String, RouterNode<T>>>
 }
 
 pub struct RouterNode<T: Send + Sync + 'static> {
@@ -86,15 +85,14 @@ impl<T> InternalRouter<T>
 where
     T: Send + Sync + 'static,
 {
-    pub fn new_stateful(state: T) -> InternalRouter<T> {
+    pub fn new() -> InternalRouter<T> {
         InternalRouter {
-            routes: HashMap::new(),
-            state: Arc::new(state),
+            routes: HashMap::new()
         }
     }
 
-    pub fn from(router: Router<T>, state: T) -> Result<InternalRouter<T>, ServerError> {
-        let mut internal_router = InternalRouter::new_stateful(state);
+    pub fn from(router: Router<T>) -> Result<InternalRouter<T>, ServerError> {
+        let mut internal_router = InternalRouter::new();
 
         for route in router.routes {
             internal_router.add_route(route.method, &route.path, route.handler)?;
@@ -176,7 +174,7 @@ where
     //
     // The point of returning here as an error is to both avoid calling the response interceptor
     // in the case of an error and to give the flexibility to later on add a global error handler
-    pub fn run(&self, mut req: Request) -> Result<(Request, Response), RequestError> {
+    pub fn run(&self, mut req: Request, state: Arc<T>) -> Result<(Request, Response), RequestError> {
         let mut path_variables = HashMap::<String, String>::new();
 
         let method_map = self.routes.get(&req.method);
@@ -213,7 +211,7 @@ where
                 if let Some(function) = node.handler.as_ref() {
                     req.set_path_variables(path_variables);
                     //optimize this
-                    return Ok((req.clone(), function(self.state.clone(), req)));
+                    return Ok((req.clone(), function(state.clone(), req)));
                 } else {
                     return Err(RequestError::with_message(
                         ErrorType::NotFound,
@@ -249,7 +247,7 @@ mod tests {
 
     #[test]
     fn router_test() {
-        let mut router = InternalRouter::new_stateful(StateTest::default());
+        let mut router = InternalRouter::new();
         if let Err(e) = router.add_route(Method::GET, "/hello", |state, _| {
             return Response::new(StatusCode::OK).json("Hello world");
         }) {
@@ -283,14 +281,16 @@ mod tests {
         let uri4 = Uri::from_static("http://domain.com/hi/other");
         let req4: Request = Request::new(Method::PUT, uri4, "Body".to_string(), HeaderMap::new(), AuthResult::Allowed);
 
-        let _ = router.run(req1);
-        let _ = router.run(req2);
-        let _ = router.run(req3);
-        let _ = router.run(req4);
-    }
+        let state = Arc::new(StateTest{});
 
+        let _ = router.run(req1, state.clone()); 
+        let _ = router.run(req2, state.clone());  
+        let _ = router.run(req3, state.clone()); 
+        let _ = router.run(req4, state.clone());  
+    }
+ 
     fn print(map: &HashMap<String, RouterNode<StateTest>>, tabs: usize) {
-        for (key2, value2) in map {
+        for (key2, value2) in map { 
             println!(
                 "{} {}: {:#?}",
                 "  ".repeat(tabs),

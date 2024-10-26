@@ -6,16 +6,17 @@ use crate::{
     request::Request,
     response::Response,
     router::{InternalRouter, Router},
-    static_file_server::StaticFileServer,
     security::SecurityConfiguration,
     server::RequestPipelineConfiguration,
+    static_file_server::StaticFileServer,
     views,
 };
 
-struct Application<T: Send + Sync + 'static> {
+pub struct Application<T: Send + Sync + 'static> {
     name: String,
     version: String,
     port: u16,
+    state: T,
     interceptor: fn(&Request, &Response),
     router: InternalRouter<T>,
     load_templates: bool,
@@ -28,6 +29,13 @@ impl<T> Application<T>
 where
     T: Send + Sync + 'static,
 {
+    pub fn builder() -> ApplicationBuilder<T>
+    where
+        T: Default,
+    {
+        ApplicationBuilder::default()
+    }
+
     pub async fn start(self) -> Result<(), ServerError> {
         info!(
             "Starting application {} v{} (via Citrine)",
@@ -46,6 +54,7 @@ where
                 self.router,
                 self.security_configuration,
                 self.static_file_server,
+                self.state,
             ),
         )
         .await;
@@ -58,8 +67,8 @@ pub struct ApplicationBuilder<T: Send + Sync + 'static> {
     name: String,
     version: String,
     port: u16,
-    interceptor: fn(&Request, &Response),
     state: T,
+    interceptor: fn(&Request, &Response),
     router: Router<T>,
     load_templates: bool,
     configure_tera: fn(Tera) -> Tera,
@@ -71,13 +80,6 @@ impl<T> ApplicationBuilder<T>
 where
     T: Send + Sync + 'static,
 {
-    pub fn new() -> ApplicationBuilder<T>
-    where
-        T: Default,
-    {
-        ApplicationBuilder::default()
-    }
-
     pub fn name(mut self, name: &str) -> ApplicationBuilder<T> {
         self.name = name.to_string();
         self
@@ -140,7 +142,7 @@ where
     }
 
     pub async fn start(self) -> Result<(), ServerError> {
-        let internal_router_res = InternalRouter::from(self.router, self.state);
+        let internal_router_res = InternalRouter::from(self.router);
         if let Err(e) = internal_router_res {
             return Err(ServerError::from(e));
         }
@@ -148,6 +150,7 @@ where
             name: self.name,
             version: self.version,
             port: self.port,
+            state: self.state,
             interceptor: self.interceptor,
             router: internal_router_res.unwrap(),
             load_templates: self.load_templates,
