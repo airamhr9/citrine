@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use hyper::{Method, Uri};
 use regex::Regex;
 
@@ -38,3 +40,18 @@ impl RequestMatcher {
 
 }
 
+impl Display for RequestMatcher {
+fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{} {}", self.method_matcher, self.path_regex)
+}
+}
+
+impl Display for MethodMatcher {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::All => write!(f, "All HTTP methods"),
+            Self::One(method) => write!(f, "{}", method),
+            Self::Multiple(methods) => write!(f, "{:?}", methods),
+        }
+    }
+}

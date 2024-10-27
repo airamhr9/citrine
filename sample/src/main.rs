@@ -6,7 +6,7 @@ use std::sync::Arc;
 use citrine_core::application::Application;
 use citrine_core::jsonwebtoken::Algorithm;
 use citrine_core::middleware::RequestMiddleware;
-use citrine_core::request::Request;
+use citrine_core::request::{AcceptType, BodyEncoding, Request};
 use citrine_core::request_matcher::MethodMatcher;
 use citrine_core::response::Response;
 use citrine_core::security::{
@@ -320,7 +320,11 @@ fn delete_by_id_controller(context: Arc<Context>, req: Request) -> Response {
 }
 
 fn create_user_controler(context: Arc<Context>, req: Request) -> Response {
-    let read_body_res: Result<CreateUser, RequestError> = req.get_body_validated();
+    let read_body_res: Result<CreateUser, RequestError> =
+        req.get_body_validated(AcceptType::Any(vec![
+            BodyEncoding::Json,
+            BodyEncoding::FormUrlEncoded,
+        ]));
     if let Err(e) = read_body_res {
         return e.to_response();
     }
@@ -339,7 +343,7 @@ fn create_user_controler(context: Arc<Context>, req: Request) -> Response {
 }
 
 fn update_user_controler(context: Arc<Context>, req: Request) -> Response {
-    let read_body_res: Result<UpdateUser, RequestError> = req.get_body_validated();
+    let read_body_res: Result<UpdateUser, RequestError> = req.get_json_body_validated();
     if let Err(e) = read_body_res {
         return e.to_response();
     }
@@ -419,7 +423,7 @@ fn delete(id: &String, db: &mut DbConnection) -> Result<(), SampleError> {
 
 fn update(id: &String, req: UpdateUser, db: &mut DbConnection) -> Result<(), SampleError> {
     let res = db.execute(
-        "UPDATE Users set username = ?1, mail = ?2 WHERE id = ?4",
+        "UPDATE Users set username = ?1, mail = ?2 WHERE id = ?3",
         (req.username, req.mail, id),
     );
 

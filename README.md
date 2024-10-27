@@ -29,6 +29,7 @@ This is at the moment a personal learning project.
     * [Static file serving](#static-file-serving)
     * [Templates](#templates)
     * [Security](#security)
+    * [Multiple Request Types](#multiple-request-types)
     * [Request middleware and response interceptor](#request-middlewares-and-response-interceptor)
 * [To Do Before MVP](#to-do-before-mvp)
 * [Planned features](#planned-features)
@@ -187,6 +188,44 @@ fn main() -> Result<(), ServerError> {
         )
         .start()
         .await
+}
+```
+
+### Multiple request types
+
+When reading a request body, we can specify the content types we support. We can support multiple 
+content types in the same endpoint, like an URL encoded form and JSON. We can use methods to 
+get the body specifying the accepted content types or the helper methods for JSON.
+
+We can also specify whether we want to validate the body when reading it. For this feature
+to work, the request body struct must derive Validate.
+
+```rust
+
+// Create user handler
+fn create_user_controler(context: Arc<Context>, req: Request) -> Response {
+    // Here we state when reading the body that we support either JSON or an URL encoded form,
+    // and want to execute request validation if reading the body was succesful 
+    let read_body_res: Result<CreateUser, RequestError> =
+        req.get_body_validated(AcceptType::Any(vec![
+            BodyEncoding::Json,
+            BodyEncoding::FormUrlEncoded,
+        ]));
+    if let Err(e) = read_body_res {
+        return e.to_response();
+    }
+    ...
+}
+
+// Update user handler
+fn update_user_controler(context: Arc<Context>, req: Request) -> Response {
+    // Here we use a helper function to only try to read the body as JSON
+    // and want to execute request validation if reading the body was succesful 
+    let read_body_res: Result<UpdateUser, RequestError> = req.get_json_body_validated();
+    if let Err(e) = read_body_res {
+        return e.to_response();
+    }
+    ...
 }
 ```
 

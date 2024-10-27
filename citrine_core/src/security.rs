@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use hyper::header::{HeaderValue, AUTHORIZATION};
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use log::debug;
@@ -34,7 +36,7 @@ impl SecurityConfiguration {
         debug!("Authorizing request {} {}", request.method, request.uri);
         for rule in self.rules.iter() {
             if rule.matches(request) {
-                debug!("Found matching rule");
+                debug!("Found matching rule: {} | {}", rule.request_matcher, rule.action);
                 return rule.get_auth_result(request);
             }
         }
@@ -88,6 +90,16 @@ impl SecurityAction {
     }
 }
 
+impl Display for SecurityAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Deny => write!(f, "Deny"),
+            Self::Allow => write!(f, "Allow"),
+            Self::Authenticate(authenticator) => write!(f, "Authenticate with {}", authenticator),
+        }
+    }
+}
+
 pub enum Authenticator {
     //todo add SAML
     JWT(JWTConfiguration),
@@ -114,6 +126,15 @@ impl Authenticator {
             Authenticator::Custom(custom_auth_function) => {
                 custom_auth_function(authorization_header.unwrap())
             }
+        }
+    }
+}
+
+impl Display for Authenticator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::JWT(_) => write!(f, "JWT"),
+            Self::Custom(_) => write!(f, "Custom"),
         }
     }
 }
