@@ -283,7 +283,6 @@ fn main() -> Result<(), ServerError> {
 
 This list is subject to change. For a more accurate representation take a look at the issues with the label 'mvp'
 
-- [ ] **License.** It is not yet decided which should be the license for this project.
 - [ ] **Better configuration.** Offer environment variables for things like the templates folder,
 default port, application name and version, and others.
 - [ ] **Better authorization options.** This could be SAML support or integration with SSO services like Keycloak.
