@@ -1,24 +1,54 @@
-use crate::request::Request;
+use crate::{
+    request::Request,
+    request_matcher::{MethodMatcher, RequestMatcher},
+};
 
 #[derive(Default)]
 pub struct RequestMiddleware {
-    functions: Vec<fn(Request) -> Request>
+    functions: Vec<Middleware>,
+}
+
+struct Middleware {
+    request_matcher: RequestMatcher,
+    function: fn(Request) -> Request,
 }
 
 impl RequestMiddleware {
-    pub fn new(middleware: fn(Request) -> Request) -> Self {
-        RequestMiddleware { functions: vec![middleware] }
+    pub fn new() -> Self {
+        RequestMiddleware { functions: vec![] }
     }
 
-    pub fn then(mut self, middleware: fn(Request) -> Request) -> Self {
-        self.functions.push(middleware);
+    pub fn add_middleware(
+        mut self,
+        method_matcher: MethodMatcher,
+        path_regex: &str,
+        middleware: fn(Request) -> Request,
+    ) -> Self {
+        self.functions.push(Middleware::new(
+            RequestMatcher::new(path_regex, method_matcher),
+            middleware,
+        ));
         self
     }
 
-    pub fn process(&self, mut request: Request) -> Request {
+    pub fn process(&self, request: Request) -> Request {
         for middleware in self.functions.iter() {
-            request = middleware(request);
+            if middleware
+                .request_matcher
+                .matches(&request.method, &request.uri)
+            {
+                return (middleware.function)(request);
+            }
         }
         request
+    }
+}
+
+impl Middleware {
+    fn new(request_matcher: RequestMatcher, function: fn(Request) -> Request) -> Self {
+        Middleware {
+            request_matcher,
+            function,
+        }
     }
 }

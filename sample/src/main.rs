@@ -7,9 +7,10 @@ use citrine_core::application::Application;
 use citrine_core::jsonwebtoken::Algorithm;
 use citrine_core::middleware::RequestMiddleware;
 use citrine_core::request::Request;
+use citrine_core::request_matcher::MethodMatcher;
 use citrine_core::response::Response;
 use citrine_core::security::{
-    Authenticator, JWTConfiguration, MethodMatcher, SecurityAction, SecurityConfiguration,
+    Authenticator, JWTConfiguration, SecurityAction, SecurityConfiguration,
 };
 use citrine_core::static_file_server::StaticFileServer;
 use citrine_core::{
@@ -39,6 +40,19 @@ async fn main() -> Result<(), ServerError> {
         .name("Citrine sample application")
         .version("0.0.1")
         .port(8080)
+        // With request middleware, we can execute a function before the request reaches
+        // our handler. You can filter which function will each request use via request matchers.
+        .request_middleware(
+            RequestMiddleware::new()
+                .add_middleware(MethodMatcher::All, "/api/*", |request| {
+                    info!("API Request: {} {}", request.method, request.uri,);
+                    request
+                })
+                .add_middleware(MethodMatcher::All, "/*", |request| {
+                    info!("Template request {} {}", request.method, request.uri);
+                    request
+                }),
+        )
         .response_interceptor(|request, response| {
             let user = if let Some(claims) = request.auth_result.get_claims() {
                 claims

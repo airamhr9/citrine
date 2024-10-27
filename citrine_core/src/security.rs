@@ -1,14 +1,12 @@
-use core::panic;
-use hyper::{
-    header::{HeaderValue, AUTHORIZATION},
-    Method,
-};
+use hyper::header::{HeaderValue, AUTHORIZATION};
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use log::debug;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-use crate::request::RequestMetadata;
+use crate::{
+    request::RequestMetadata,
+    request_matcher::{MethodMatcher, RequestMatcher},
+};
 
 pub struct SecurityConfiguration {
     rules: Vec<SecurityRule>,
@@ -35,7 +33,7 @@ impl SecurityConfiguration {
     pub fn authorize(&self, request: &RequestMetadata) -> AuthResult {
         debug!("Authorizing request {} {}", request.method, request.uri);
         for rule in self.rules.iter() {
-            if rule.matches(request)  {
+            if rule.matches(request) {
                 debug!("Found matching rule");
                 return rule.get_auth_result(request);
             }
@@ -66,7 +64,7 @@ impl SecurityRule {
     }
 
     pub fn matches(&self, request: &RequestMetadata) -> bool {
-        self.request_matcher.matches(request)
+        self.request_matcher.matches(&request.method, &request.uri)
     }
 
     pub fn get_auth_result(&self, request: &RequestMetadata) -> AuthResult {
@@ -86,42 +84,6 @@ impl SecurityAction {
             Self::Deny => AuthResult::Denied,
             Self::Allow => AuthResult::Allowed,
             Self::Authenticate(authenticator) => authenticator.authenticate(request),
-        }
-    }
-}
-
-pub enum MethodMatcher {
-    One(Method),
-    Multiple(Vec<Method>),
-    All,
-}
-
-struct RequestMatcher {
-    path_regex: Regex,
-    method_matcher: MethodMatcher,
-}
-
-impl RequestMatcher {
-    pub fn new(path_regex: &str, method_matcher: MethodMatcher) -> Self {
-        let regex_res = Regex::new(path_regex);
-        if let Err(e) = regex_res {
-            panic!("Malformed request matcher in security configuration: {}", e);
-        }
-        RequestMatcher {
-            path_regex: regex_res.unwrap(),
-            method_matcher,
-        }
-    }
-
-    pub fn matches(&self, request: &RequestMetadata) -> bool {
-        self.matches_method(&request.method) && self.path_regex.is_match(request.uri.path())
-    }
-
-    fn matches_method(&self, method: &Method) -> bool {
-        match &self.method_matcher {
-            MethodMatcher::All => true,
-            MethodMatcher::One(m) => method == m,
-            MethodMatcher::Multiple(methods) => methods.contains(method),
         }
     }
 }
@@ -158,14 +120,16 @@ impl Authenticator {
 
 pub struct JWTConfiguration {
     secret: String,
-    algorithm: Algorithm
+    algorithm: Algorithm,
 }
 
 impl JWTConfiguration {
     pub fn new(secret: &str, algorithm: Algorithm) -> Self {
-        JWTConfiguration { secret: secret.to_string(), algorithm }
+        JWTConfiguration {
+            secret: secret.to_string(),
+            algorithm,
+        }
     }
-    
 
     fn authenticate(&self, token: &str) -> AuthResult {
         debug!("Using JWT Authenticator");
@@ -174,9 +138,9 @@ impl JWTConfiguration {
         let token = split_token.last().unwrap_or("");
 
         let token_data = jsonwebtoken::decode::<AuthClaims>(
-            token,                      
-            &DecodingKey::from_secret(self.secret.as_ref()),  
-            &validation,                 
+            token,
+            &DecodingKey::from_secret(self.secret.as_ref()),
+            &validation,
         );
 
         if token_data.is_err() {
@@ -196,8 +160,8 @@ pub struct AuthClaims {
     pub iat: Option<usize>,
     pub admin: Option<bool>,
     pub exp: Option<usize>,
-    pub iss: Option<String>,         
-    pub nbf: Option<usize>,          
+    pub iss: Option<String>,
+    pub nbf: Option<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -205,14 +169,14 @@ pub enum AuthResult {
     Denied,
     Allowed,
     JWTAuthenticated(AuthClaims),
-    CustomAuthenticated(String)
+    CustomAuthenticated(String),
 }
 
 impl AuthResult {
     pub fn get_claims(&self) -> Option<&AuthClaims> {
         match self {
             AuthResult::JWTAuthenticated(claims) => Some(claims),
-            _ => None
+            _ => None,
         }
     }
 }

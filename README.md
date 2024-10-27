@@ -193,22 +193,27 @@ fn main() -> Result<(), ServerError> {
 ### Request middlewares and response interceptor
 
 For logging or other purposes, Citrine provides two tools, request middlewares and a response interceptor function.
+
 Request middlewares will be executed just before a request reaches the handler, allowing you to log it or 
-modify it as you please. The response_interceptor function will be executed after every request, 
-giving read access to the request and response. 
+modify it as you please. You can filter which middleware each function uses via request matchers, just
+like the security configuration. Each request will enter just one middleware, the first one that matches in definition order.
+All requests must have passed the authorization filter and not be static file requests, because they will have already been served.
+
+The response interceptor function will be executed after every request, giving read access to the request and response. 
 ```rust
 fn main() -> Result<(), ServerError> {
     Application::<Context>::builder()
         ...
         .request_middleware(
-            RequestMiddleware::new(|request| {
-                debug!("First middleware {:?}", request);
-                request
-            })
-            .then(|request| {
-                debug!("Second middleware {:?}", request);
-                request
-            }),
+            RequestMiddleware::new()
+                .add_middleware(MethodMatcher::All, "/api/*", |request| {
+                    info!("API Request: {} {}", request.method, request.uri,);
+                    request
+                })
+                .add_middleware(MethodMatcher::All, "/*", |request| {
+                    info!("Template request {} {}", request.method, request.uri);
+                    request
+                }),
         )
         .response_interceptor(|request, response| {
             let user = if let Some(claims) = request.auth_result.get_claims() {

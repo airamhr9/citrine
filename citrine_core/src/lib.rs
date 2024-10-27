@@ -17,5 +17,6 @@ pub mod request;
 pub mod response;
 pub mod application;
 pub mod static_file_server;
+pub mod request_matcher;
 
 extern crate lazy_static;
