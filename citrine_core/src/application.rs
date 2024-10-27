@@ -16,7 +16,7 @@ pub struct Application<T: Send + Sync + 'static> {
     name: String,
     version: String,
     port: u16,
-    state: T,
+    context: T,
     interceptor: fn(&Request, &Response),
     router: InternalRouter<T>,
     load_templates: bool,
@@ -54,7 +54,7 @@ where
                 self.router,
                 self.security_configuration,
                 self.static_file_server,
-                self.state,
+                self.context,
             ),
         )
         .await;
@@ -67,7 +67,7 @@ pub struct ApplicationBuilder<T: Send + Sync + 'static> {
     name: String,
     version: String,
     port: u16,
-    state: T,
+    context: T,
     interceptor: fn(&Request, &Response),
     router: Router<T>,
     load_templates: bool,
@@ -100,8 +100,8 @@ where
         self
     }
 
-    pub fn state(mut self, state: T) -> ApplicationBuilder<T> {
-        self.state = state;
+    pub fn context(mut self, context: T) -> ApplicationBuilder<T> {
+        self.context = context;
         self
     }
 
@@ -150,7 +150,7 @@ where
             name: self.name,
             version: self.version,
             port: self.port,
-            state: self.state,
+            context: self.context,
             interceptor: self.interceptor,
             router: internal_router_res.unwrap(),
             load_templates: self.load_templates,
@@ -174,7 +174,7 @@ where
             port: 8080,
             interceptor: |_, _| {},
             router: Router::new(),
-            state: T::default(),
+            context: T::default(),
             load_templates: false,
             configure_tera: |t| t,
             security_configuration: SecurityConfiguration::new(),

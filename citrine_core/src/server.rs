@@ -21,7 +21,7 @@ pub struct RequestPipelineConfiguration<T: 'static + Send + Sync> {
     router: InternalRouter<T>,
     security_configuration: SecurityConfiguration,
     static_file_server: StaticFileServer,
-    state: Arc<T> 
+    context: Arc<T> 
 }
 
 impl<T> RequestPipelineConfiguration<T>
@@ -33,14 +33,14 @@ where
         router: InternalRouter<T>,
         security_configuration: SecurityConfiguration,
         static_file_server: StaticFileServer,
-        state: T
+        context: T
     ) -> Self {
         RequestPipelineConfiguration {
             interceptor,
             router,
             security_configuration,
             static_file_server,
-            state: Arc::new(state)
+            context: Arc::new(context)
         }
     }
 }
@@ -147,7 +147,7 @@ async fn handle_request<T: Send + Sync + 'static>(
     let internal_request = internal_request_res.unwrap();
 
     // Fourth, use the router to get the REST request result
-    let router_result = config.router.run(internal_request, config.state.clone());
+    let router_result = config.router.run(internal_request, config.context.clone());
     if let Err(e) = router_result {
         return e.to_response().try_into();
     }

@@ -54,7 +54,7 @@ Routers can be nested, providing flexibility when designing your API.
 ```rust
 // Application definition
 fn main() -> Result<(), ServerError> {
-    Application::<State>::builder()
+    Application::<Context>::builder()
         ...
         .router(
             Router::new()
@@ -67,12 +67,12 @@ fn main() -> Result<(), ServerError> {
 
 
 // Endpoint handler definition 
-fn base_path_controller(state: Arc<State>, _: Request) -> Response {
+fn base_path_controller(context: Arc<Context>, _: Request) -> Response {
  // controller contents
 }
 
 // Router definition
-fn user_router() -> Router<State> {
+fn user_router() -> Router<Context> {
     Router::base_path("/users")
         .add_route(Method::GET, "", find_all_users_controller)
         .add_route(Method::GET, "/:id", find_by_id_controller)
@@ -89,7 +89,7 @@ basic files like a favicon.ico or complete Front-End applications statically com
 
 ```rust
 fn main() -> Result<(), ServerError> {
-    Application::<State>::builder()
+    Application::<Context>::builder()
         ...
         // we serve all of the files under the ./public folder in the base path of our 
         // application and all the files under ./static_views in the path /static
@@ -115,7 +115,7 @@ the templates will be automatically reloaded when every request to a template en
 ```rust
 // Application definition
 fn main() -> Result<(), ServerError> {
-    Application::<State>::builder()
+    Application::<Context>::builder()
         ...
         .configure_tera(|mut tera| {
             tera.register_filter("url_encode", url_encode_filter);
@@ -126,8 +126,8 @@ fn main() -> Result<(), ServerError> {
 }
 
 // This is the handler for the / path. In this case we are going to return an HTML template
-fn base_path_controller(state: Arc<State>, _: Request) -> Response {
-    let mut db = state.get_db_connection();
+fn base_path_controller(context: Arc<Context>, _: Request) -> Response {
+    let mut db = context.get_db_connection();
     let users_res = find_all_users(&mut db);
     if users_res.is_err() {
         return Response::view("error.html", &json!({})).unwrap();
@@ -166,7 +166,7 @@ for any request or just assigning a default behaviour for all.
 
 ```rust
 fn main() -> Result<(), ServerError> {
-    Application::<State>::builder()
+    Application::<Context>::builder()
         ...
         .security_configuration(
             SecurityConfiguration::new()
@@ -198,7 +198,7 @@ will be included.
 
 ```rust
 fn main() -> Result<(), ServerError> {
-    Application::<State>::builder()
+    Application::<Context>::builder()
         ...
         .interceptor(|request, response| {
             let user = if let Some(claims) = request.auth_result.get_claims() {
@@ -246,7 +246,7 @@ early even if there is little to document by now.
 ## Planned features
 
 This could come either before or after the above features. This list is also subject to change, check the
-issues page for a more precise state.
+issues page for a more precise context.
 
 - [ ] GraphQL support
 - [ ] DEV UI

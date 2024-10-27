@@ -34,7 +34,7 @@ async fn main() -> Result<(), ServerError> {
     // This is a dummy JWT secret key for testing purposes. You should generate one and use it via environment variables
     let jwt_secret = "NTNv7j0TuYARvmNMmWXo6fKvM4o6nv/aUi9ryX38ZH+L1bkrnD1ObOQ8JAUmHCBq7Iy7otZcyAagBLHVKvvYaIpmMuxmARQ97jUVG16Jkpkp1wXOPsrF9zwew6TpczyHkHgX5EuLg2MeBuiT/qJACs1J0apruOOJCg/gOtkjB4c=";
 
-    Application::<State>::builder()
+    Application::<Context>::builder()
         .name("Citrine sample application")
         .version("0.0.1")
         .port(8080)
@@ -94,29 +94,29 @@ async fn main() -> Result<(), ServerError> {
 }
 
 /*
- * This is the state struct, which allows access to shared information in the request handlers,
+ * This is the context struct, which allows access to shared information in the request handlers,
  * like DB connections. It should ideally be immutable, in order to avoid having to wrap it with
  * some Lock or Mutex and avoid bottlenecks. That's why in this example we use a DB Connection pool
  * instead of a single connection.
  *
- * All State functions must implement the Default trait. Here, we use it to intialize the database
+ * All Context functions must implement the Default trait. Here, we use it to intialize the database
  * connection pool, create the model and insert some mock data.
  * */
 
 type DbConnection = PooledConnection<SqliteConnectionManager>;
 type DbPool = r2d2::Pool<SqliteConnectionManager>;
 
-pub struct State {
+pub struct Context {
     db: DbPool,
 }
 
-impl State {
+impl Context {
     fn get_db_connection(&self) -> DbConnection {
         self.db.get().unwrap()
     }
 }
 
-impl Default for State {
+impl Default for Context {
     fn default() -> Self {
         let manager = SqliteConnectionManager::memory();
 
@@ -133,7 +133,7 @@ impl Default for State {
             create(user.clone(), &mut db).unwrap();
         }
 
-        State { db: pool }
+        Context { db: pool }
     }
 }
 
@@ -225,8 +225,8 @@ impl Display for SampleError {
  * This is the handler for the / path. In this case we are going to return an HTML template
  * */
 
-fn base_path_controller(state: Arc<State>, _: Request) -> Response {
-    let mut db = state.get_db_connection();
+fn base_path_controller(context: Arc<Context>, _: Request) -> Response {
+    let mut db = context.get_db_connection();
     let users_res = find_all_users(&mut db);
     if users_res.is_err() {
         return Response::view("error.html", &json!({})).unwrap();
@@ -243,7 +243,7 @@ fn base_path_controller(state: Arc<State>, _: Request) -> Response {
  * application and sets a function handler for each.
  * */
 
-fn user_router() -> Router<State> {
+fn user_router() -> Router<Context> {
     Router::base_path("/users")
         .add_route(Method::GET, "", find_all_users_controller)
         .add_route(Method::GET, "/:id", find_by_id_controller)
@@ -253,12 +253,12 @@ fn user_router() -> Router<State> {
 }
 
 /*
- * This are the REST endpoint handlers. They receive the application's state struct and the request
+ * This are the REST endpoint handlers. They receive the application's context struct and the request
  * as parameters.
  * */
 
-fn find_all_users_controller(state: Arc<State>, _: Request) -> Response {
-    let mut db = state.get_db_connection();
+fn find_all_users_controller(context: Arc<Context>, _: Request) -> Response {
+    let mut db = context.get_db_connection();
 
     let users_res = find_all_users(&mut db);
     if let Err(e) = users_res {
@@ -270,11 +270,11 @@ fn find_all_users_controller(state: Arc<State>, _: Request) -> Response {
     Response::new(StatusCode::OK).json(users_res.unwrap())
 }
 
-fn find_by_id_controller(state: Arc<State>, req: Request) -> Response {
+fn find_by_id_controller(context: Arc<Context>, req: Request) -> Response {
     let path_variables = req.path_variables;
     let id = path_variables.get("id").unwrap();
 
-    let user_res = find_by_id(id, &mut state.get_db_connection());
+    let user_res = find_by_id(id, &mut context.get_db_connection());
     if let Err(e) = user_res {
         return Response::new(StatusCode::INTERNAL_SERVER_ERROR).json(
             DefaultErrorResponseBody::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
@@ -288,11 +288,11 @@ fn find_by_id_controller(state: Arc<State>, req: Request) -> Response {
     }
 }
 
-fn delete_by_id_controller(state: Arc<State>, req: Request) -> Response {
+fn delete_by_id_controller(context: Arc<Context>, req: Request) -> Response {
     let path_variables = req.path_variables;
     let id = path_variables.get("id").unwrap();
 
-    let mut db = state.db.get().unwrap();
+    let mut db = context.db.get().unwrap();
 
     if let Err(e) = delete(id, &mut db) {
         Response::new(StatusCode::NO_CONTENT).json(DefaultErrorResponseBody::new(
@@ -304,14 +304,14 @@ fn delete_by_id_controller(state: Arc<State>, req: Request) -> Response {
     }
 }
 
-fn create_user_controler(state: Arc<State>, req: Request) -> Response {
+fn create_user_controler(context: Arc<Context>, req: Request) -> Response {
     let read_body_res: Result<CreateUser, RequestError> = req.get_body_validated();
     if let Err(e) = read_body_res {
         return e.to_response();
     }
 
     let user = read_body_res.unwrap();
-    let mut db = state.db.get().unwrap();
+    let mut db = context.db.get().unwrap();
 
     if let Err(e) = create(user.into(), &mut db) {
         Response::new(StatusCode::INTERNAL_SERVER_ERROR).json(DefaultErrorResponseBody::new(
@@ -323,7 +323,7 @@ fn create_user_controler(state: Arc<State>, req: Request) -> Response {
     }
 }
 
-fn update_user_controler(state: Arc<State>, req: Request) -> Response {
+fn update_user_controler(context: Arc<Context>, req: Request) -> Response {
     let read_body_res: Result<UpdateUser, RequestError> = req.get_body_validated();
     if let Err(e) = read_body_res {
         return e.to_response();
@@ -332,7 +332,7 @@ fn update_user_controler(state: Arc<State>, req: Request) -> Response {
     let user = read_body_res.unwrap();
     let id = req.path_variables.get("id").unwrap();
 
-    let mut db = state.db.get().unwrap();
+    let mut db = context.db.get().unwrap();
 
     if let Err(e) = update(id, user, &mut db) {
         Response::new(StatusCode::INTERNAL_SERVER_ERROR).json(DefaultErrorResponseBody::new(
