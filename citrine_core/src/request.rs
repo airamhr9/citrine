@@ -149,7 +149,7 @@ impl Request {
 
 pub enum AcceptType {
     One(BodyEncoding),
-    Any(Vec<BodyEncoding>),
+    Multiple(Vec<BodyEncoding>),
 }
 
 impl AcceptType {
@@ -164,7 +164,7 @@ impl AcceptType {
                         None
                     }
                 }
-                AcceptType::Any(encodings) => {
+                AcceptType::Multiple(encodings) => {
                     for encoding in encodings {
                         if encoding.is_valid(content_type) {
                             return Some(encoding.clone());

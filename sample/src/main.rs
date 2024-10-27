@@ -321,7 +321,7 @@ fn delete_by_id_controller(context: Arc<Context>, req: Request) -> Response {
 
 fn create_user_controler(context: Arc<Context>, req: Request) -> Response {
     let read_body_res: Result<CreateUser, RequestError> =
-        req.get_body_validated(AcceptType::Any(vec![
+        req.get_body_validated(AcceptType::Multiple(vec![
             BodyEncoding::Json,
             BodyEncoding::FormUrlEncoded,
         ]));
