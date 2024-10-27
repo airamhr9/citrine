@@ -207,9 +207,9 @@ fn create_user_controler(context: Arc<Context>, req: Request) -> Response {
     // Here we state when reading the body that we support either JSON or an URL encoded form,
     // and want to execute request validation if reading the body was succesful 
     let read_body_res: Result<CreateUser, RequestError> =
-        req.get_body_validated(AcceptType::Multiple(vec![
-            BodyEncoding::Json,
-            BodyEncoding::FormUrlEncoded,
+        req.get_body_validated(Accepts::Multiple(vec![
+            ContentType::Json,
+            ContentType::FormUrlEncoded,
         ]));
     if let Err(e) = read_body_res {
         return e.to_response();

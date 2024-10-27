@@ -98,17 +98,17 @@ impl Request {
     where
         T: DeserializeOwned,
     {
-        self.get_body(AcceptType::One(BodyEncoding::Json))
+        self.get_body(Accepts::One(ContentType::Json))
     }
 
     pub fn get_json_body_validated<T>(&self) -> Result<T, RequestError>
     where
         T: DeserializeOwned + Validate,
     {
-        self.get_body_validated(AcceptType::One(BodyEncoding::Json))
+        self.get_body_validated(Accepts::One(ContentType::Json))
     }
 
-    pub fn get_body<T>(&self, accept_type: AcceptType) -> Result<T, RequestError>
+    pub fn get_body<T>(&self, accept_type: Accepts) -> Result<T, RequestError>
     where
         T: DeserializeOwned,
     {
@@ -124,7 +124,7 @@ impl Request {
         Ok(body_res.unwrap())
     }
 
-    pub fn get_body_validated<T>(&self, accept_type: AcceptType) -> Result<T, RequestError>
+    pub fn get_body_validated<T>(&self, accept_type: Accepts) -> Result<T, RequestError>
     where
         T: DeserializeOwned + Validate,
     {
@@ -147,24 +147,24 @@ impl Request {
     }
 }
 
-pub enum AcceptType {
-    One(BodyEncoding),
-    Multiple(Vec<BodyEncoding>),
+pub enum Accepts {
+    One(ContentType),
+    Multiple(Vec<ContentType>),
 }
 
-impl AcceptType {
-    fn get_matching(&self, req: &Request) -> Option<BodyEncoding> {
+impl Accepts {
+    fn get_matching(&self, req: &Request) -> Option<ContentType> {
         if let Some(content_type) = req.headers.get(CONTENT_TYPE) {
             let content_type = content_type.to_str().unwrap();
             return match self {
-                AcceptType::One(encoding) => {
+                Accepts::One(encoding) => {
                     if encoding.is_valid(content_type) {
                         Some(encoding.clone())
                     } else {
                         None
                     }
                 }
-                AcceptType::Multiple(encodings) => {
+                Accepts::Multiple(encodings) => {
                     for encoding in encodings {
                         if encoding.is_valid(content_type) {
                             return Some(encoding.clone());
@@ -192,12 +192,12 @@ impl AcceptType {
 }
 
 #[derive(Debug, Clone)]
-pub enum BodyEncoding {
+pub enum ContentType {
     Json,
     FormUrlEncoded,
 }
 
-impl BodyEncoding {
+impl ContentType {
     fn is_valid(&self, content_type: &str) -> bool {
         content_type
             == match self {
@@ -212,7 +212,7 @@ impl BodyEncoding {
     {
         let body_str = req.body.as_ref().unwrap();
         match self {
-            BodyEncoding::Json => {
+            ContentType::Json => {
                 let res: Result<T, _> = serde_json::from_str(body_str);
                 if let Err(e) = res {
                     Err(e.into())
@@ -220,7 +220,7 @@ impl BodyEncoding {
                     Ok(res.unwrap())
                 }
             }
-            BodyEncoding::FormUrlEncoded => {
+            ContentType::FormUrlEncoded => {
                 let res: Result<T, _> = serde_html_form::from_str(body_str);
                 if let Err(e) = res {
                     Err(e.into())

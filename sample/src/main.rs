@@ -6,7 +6,7 @@ use std::sync::Arc;
 use citrine_core::application::Application;
 use citrine_core::jsonwebtoken::Algorithm;
 use citrine_core::middleware::RequestMiddleware;
-use citrine_core::request::{AcceptType, BodyEncoding, Request};
+use citrine_core::request::{Accepts, ContentType, Request};
 use citrine_core::request_matcher::MethodMatcher;
 use citrine_core::response::Response;
 use citrine_core::security::{
@@ -321,9 +321,9 @@ fn delete_by_id_controller(context: Arc<Context>, req: Request) -> Response {
 
 fn create_user_controler(context: Arc<Context>, req: Request) -> Response {
     let read_body_res: Result<CreateUser, RequestError> =
-        req.get_body_validated(AcceptType::Multiple(vec![
-            BodyEncoding::Json,
-            BodyEncoding::FormUrlEncoded,
+        req.get_body_validated(Accepts::Multiple(vec![
+            ContentType::Json,
+            ContentType::FormUrlEncoded,
         ]));
     if let Err(e) = read_body_res {
         return e.to_response();
