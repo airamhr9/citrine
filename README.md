@@ -49,7 +49,7 @@ in this repository.
 #### REST request handling and routing, using [Hyper](https://hyper.rs/) as the HTTP server
 
 The Router struct will contain all the endpoints and handlers for your application. 
-Routers can be nested, providing flexibility when designing your REST API.
+Routers can be nested, providing flexibility when designing your API.
 
 ```rust
 // Application definition
@@ -128,12 +128,17 @@ fn main() -> Result<(), ServerError> {
 // This is the handler for the / path. In this case we are going to return an HTML template
 fn base_path_controller(state: Arc<State>, _: Request) -> Response {
     let mut db = state.get_db_connection();
+    let users_res = find_all_users(&mut db);
+    if users_res.is_err() {
+        return Response::view("error.html", &json!({})).unwrap();
+    }
     let users = UserListResponse {
-        users: find_all_users(&mut db),
+        users: users_res.unwrap(),
     };
 
     Response::view("index.html", &users).unwrap()
 }
+
 
 // A filter to use in our Tera templates
 fn url_encode_filter(
@@ -167,7 +172,7 @@ fn main() -> Result<(), ServerError> {
             SecurityConfiguration::new()
                 // We protect writes in the /api subdomain but allow reads
                 .add_rule(
-                    MethodMatcher::Multiple(vec![Method::POST, Method::PUT]),
+                    MethodMatcher::Multiple(vec![Method::POST, Method::PUT, Method::DELETE]),
                     "/api/*",
                     SecurityAction::Authenticate(Authenticator::JWT(JWTConfiguration::new(
                         jwt_secret,
@@ -246,3 +251,4 @@ issues page for a more precise state.
 - [ ] GraphQL support
 - [ ] DEV UI
 - [ ] Request middleware support
+- [ ] Use a new HTTP Server instead of Hyper

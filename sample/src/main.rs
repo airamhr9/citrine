@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -14,17 +15,17 @@ use citrine_core::{
     self, tera, tokio, DefaultErrorResponseBody, Method, RequestError, Router, ServerError,
     StatusCode,
 };
+use mock_data::get_mock_users;
+use r2d2_sqlite::SqliteConnectionManager;
+use rusqlite::{params, OptionalExtension};
+use serde_json::json;
 use validator::Validate;
 
-use log::info;
+use log::{debug, info};
 use r2d2::PooledConnection;
 use serde::{Deserialize, Serialize};
-use skytable::pool::ConnectionMgrTcp;
-use skytable::response::Rows;
-use skytable::{query, Config};
 
-#[macro_use]
-extern crate lazy_static;
+mod mock_data;
 
 #[tokio::main]
 async fn main() -> Result<(), ServerError> {
@@ -56,7 +57,7 @@ async fn main() -> Result<(), ServerError> {
                 response.status,
             )
         })
-        // We serve all of the files under the ./public folder in the base path of our 
+        // We serve all of the files under the ./public folder in the base path of our
         // application and all the files under ./static_views in the path /static
         .serve_static_files(
             StaticFileServer::new()
@@ -71,7 +72,7 @@ async fn main() -> Result<(), ServerError> {
             SecurityConfiguration::new()
                 // We protect writes in the /api subdomain but allow reads
                 .add_rule(
-                    MethodMatcher::Multiple(vec![Method::POST, Method::PUT]),
+                    MethodMatcher::Multiple(vec![Method::POST, Method::PUT, Method::DELETE]),
                     "/api/*",
                     SecurityAction::Authenticate(Authenticator::JWT(JWTConfiguration::new(
                         jwt_secret,
@@ -102,11 +103,12 @@ async fn main() -> Result<(), ServerError> {
  * connection pool, create the model and insert some mock data.
  * */
 
-pub struct State {
-    db: r2d2::Pool<ConnectionMgrTcp>,
-}
+type DbConnection = PooledConnection<SqliteConnectionManager>;
+type DbPool = r2d2::Pool<SqliteConnectionManager>;
 
-type DbConnection = PooledConnection<ConnectionMgrTcp>;
+pub struct State {
+    db: DbPool,
+}
 
 impl State {
     fn get_db_connection(&self) -> DbConnection {
@@ -116,23 +118,18 @@ impl State {
 
 impl Default for State {
     fn default() -> Self {
-        // create connection pool
-        let pool =
-            skytable::pool::get(8, Config::new_default("root", "123456789101112131415")).unwrap();
+        let manager = SqliteConnectionManager::memory();
+
+        let pool = r2d2::Pool::builder().build(manager).unwrap();
 
         let mut db = pool.get().unwrap();
 
-        // set up database
-        db.query_parse::<bool>(&query!("drop space if exists allow not empty sample"))
-            .unwrap();
-        db.query_parse::<()>(&query!("create space sample"))
-            .unwrap();
-        db.query_parse::<()>(&query!(
-            "create model sample.users(id: string, username: string, mail: string, profile_picture_url: string)"
-        ))
-        .unwrap();
+        match db.execute(&mock_data::get_database_creation_query(), ()) {
+            Ok(_) => debug!("In memory database succesfully created"),
+            Err(e) => panic!("Error creating in memory database {}", e),
+        }
 
-        for user in USERS.iter() {
+        for user in get_mock_users().iter() {
             create(user.clone(), &mut db).unwrap();
         }
 
@@ -150,7 +147,7 @@ impl Default for State {
  * returned from them, but this will vary based on your choice of persistence.
  * */
 
-#[derive(skytable::Query, skytable::Response, Clone, Serialize, Deserialize, Validate)]
+#[derive(Clone, Serialize, Deserialize, Validate)]
 pub struct User {
     pub id: String,
     pub username: String,
@@ -169,7 +166,7 @@ impl From<CreateUser> for User {
     }
 }
 
-#[derive(skytable::Query, Deserialize, Validate)]
+#[derive(Deserialize, Validate)]
 pub struct CreateUser {
     pub id: String,
     #[validate(length(min = 1))]
@@ -178,7 +175,7 @@ pub struct CreateUser {
     pub mail: String,
 }
 
-#[derive(skytable::Query, Deserialize, Validate)]
+#[derive(Deserialize, Validate)]
 pub struct UpdateUser {
     #[validate(length(min = 1))]
     pub username: String,
@@ -191,14 +188,51 @@ pub struct UserListResponse {
     users: Vec<User>,
 }
 
+#[derive(Debug)]
+struct SampleError {
+    message: String,
+    cause: Option<Box<dyn std::error::Error>>,
+}
+
+impl SampleError {
+    fn new<E>(message: &str, cause: E) -> Self
+    where
+        E: std::error::Error + 'static,
+    {
+        SampleError {
+            message: message.to_string(),
+            cause: Some(Box::new(cause)),
+        }
+    }
+}
+impl From<r2d2_sqlite::rusqlite::Error> for SampleError {
+    fn from(value: r2d2_sqlite::rusqlite::Error) -> Self {
+        SampleError::new("Error interacting with the database", value)
+    }
+}
+impl Display for SampleError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(cause) = &self.cause {
+            write!(f, "SampleError: {}, caused by: {}", self.message, cause)?
+        } else {
+            write!(f, "SampleError: {}", self.message)?
+        }
+        Ok(())
+    }
+}
+
 /*
  * This is the handler for the / path. In this case we are going to return an HTML template
  * */
 
 fn base_path_controller(state: Arc<State>, _: Request) -> Response {
     let mut db = state.get_db_connection();
+    let users_res = find_all_users(&mut db);
+    if users_res.is_err() {
+        return Response::view("error.html", &json!({})).unwrap();
+    }
     let users = UserListResponse {
-        users: find_all_users(&mut db),
+        users: users_res.unwrap(),
     };
 
     Response::view("index.html", &users).unwrap()
@@ -226,16 +260,27 @@ fn user_router() -> Router<State> {
 fn find_all_users_controller(state: Arc<State>, _: Request) -> Response {
     let mut db = state.get_db_connection();
 
-    let users = find_all_users(&mut db);
+    let users_res = find_all_users(&mut db);
+    if let Err(e) = users_res {
+        return Response::new(StatusCode::INTERNAL_SERVER_ERROR).json(
+            DefaultErrorResponseBody::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        );
+    }
 
-    Response::new(StatusCode::OK).json(users)
+    Response::new(StatusCode::OK).json(users_res.unwrap())
 }
 
 fn find_by_id_controller(state: Arc<State>, req: Request) -> Response {
     let path_variables = req.path_variables;
     let id = path_variables.get("id").unwrap();
 
-    let opt_user = find_by_id(id, &mut state.get_db_connection());
+    let user_res = find_by_id(id, &mut state.get_db_connection());
+    if let Err(e) = user_res {
+        return Response::new(StatusCode::INTERNAL_SERVER_ERROR).json(
+            DefaultErrorResponseBody::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        );
+    }
+    let opt_user = user_res.unwrap();
     if let Some(user) = opt_user {
         Response::new(StatusCode::OK).json(user)
     } else {
@@ -303,42 +348,70 @@ fn update_user_controler(state: Arc<State>, req: Request) -> Response {
  * This are the "service layer" functions and contain the business logic.
  * */
 
-fn find_all_users(db: &mut DbConnection) -> Vec<User> {
-    let users: Rows<User> = db
-        .query_parse(&query!("select all * from sample.users limit ?", 1000u64))
-        .unwrap();
+fn find_all_users(db: &mut DbConnection) -> Result<Vec<User>, SampleError> {
+    let mut stmt = db.prepare("SELECT id, username, mail, profile_picture_url from Users")?;
 
-    users.to_vec()
+    let users = stmt
+        .query_map([], |row| {
+            Ok(User {
+                id: row.get(0)?,
+                username: row.get(1)?,
+                mail: row.get(2)?,
+                profile_picture_url: row.get(3)?,
+            })
+        })?
+        .collect::<Result<Vec<User>, _>>()?; // Collect rows into a Vec<User>
+
+    Ok(users)
 }
 
-fn find_by_id(id: &String, db: &mut DbConnection) -> Option<User> {
-    let user_res: Result<User, _> =
-        db.query_parse(&query!("select * from sample.users where id = ?", id));
-    if let Ok(user) = user_res {
-        Some(user)
-    } else {
-        None
+fn find_by_id(id: &String, db: &mut DbConnection) -> Result<Option<User>, SampleError> {
+    let mut stmt =
+        db.prepare("SELECT id, username, mail, profile_picture_url from Users where id = ?1")?;
+
+    let user = stmt
+        .query_row(params![id], |row| {
+            Ok(User {
+                id: row.get(0)?,
+                username: row.get(1)?,
+                mail: row.get(2)?,
+                profile_picture_url: row.get(3)?,
+            })
+        })
+        .optional()?;
+
+    Ok(user)
+}
+
+fn create(user: User, db: &mut DbConnection) -> Result<(), SampleError> {
+    let res = db.execute(
+        "INSERT INTO Users (id, username, mail, profile_picture_url) VALUES (?1, ?2, ?3, ?4)",
+        (user.id, user.username, user.mail, user.profile_picture_url),
+    );
+    match res {
+        Ok(_) => Ok(()),
+        Err(e) => Err(SampleError::new("Error creating user", e)),
     }
 }
 
-fn create(user: User, db: &mut DbConnection) -> Result<(), skytable::error::Error> {
-    db.query_parse::<()>(&query!("insert into sample.users(?, ?, ?, ?)", user))
+fn delete(id: &String, db: &mut DbConnection) -> Result<(), SampleError> {
+    let res = db.execute("DELETE FROM Users where id = ?1", params![id]);
+    match res {
+        Ok(_) => Ok(()),
+        Err(e) => Err(SampleError::new("Error deleting user", e)),
+    }
 }
 
-fn delete(id: &String, db: &mut DbConnection) -> Result<(), skytable::error::Error> {
-    db.query_parse::<()>(&query!("delete from sample.users where id = ?", &id))
-}
+fn update(id: &String, req: UpdateUser, db: &mut DbConnection) -> Result<(), SampleError> {
+    let res = db.execute(
+        "UPDATE Users set username = ?1, mail = ?2 WHERE id = ?4",
+        (req.username, req.mail, id),
+    );
 
-fn update(
-    id: &String,
-    req: UpdateUser,
-    db: &mut DbConnection,
-) -> Result<(), skytable::error::Error> {
-    db.query_parse::<()>(&query!(
-        "update sample.users set username = ?, mail = ?, profile_picture_url ? where id = ?",
-        &req,
-        id
-    ))
+    match res {
+        Ok(_) => Ok(()),
+        Err(e) => Err(SampleError::new("Error updating user", e)),
+    }
 }
 
 // A filter to use in our Tera templates
@@ -353,71 +426,4 @@ fn url_encode_filter(
     let encoded = url::form_urlencoded::byte_serialize(input.as_bytes()).collect();
 
     Ok(tera::Value::String(encoded))
-}
-
-// Mock data to to insert on intialization
-
-lazy_static! {
-    static ref USERS: Vec<User> = vec![
-        User {
-            id: String::from("1"),
-            username: String::from("alice123"),
-            mail: String::from("alice@example.com"),
-            profile_picture_url: String::from("https://i.pravatar.cc/150?u=alice@example.com"),
-        },
-        User {
-            id: String::from("2"),
-            username: String::from("bob_the_builder"),
-            mail: String::from("bob@builder.com"),
-            profile_picture_url: String::new()
-        },
-        User {
-            id: String::from("3"),
-            username: String::from("charlie_brown"),
-            mail: String::from("charlie@peanuts.com"),
-            profile_picture_url: String::from("https://i.pravatar.cc/150?u=charlie@peanuts.com"),
-        },
-        User {
-            id: String::from("4"),
-            username: String::from("dave99"),
-            mail: String::from("dave99@example.com"),
-            profile_picture_url: String::from("https://i.pravatar.cc/150?u=dave99@example.com"),
-        },
-        User {
-            id: String::from("5"),
-            username: String::from("eve_adventurer"),
-            mail: String::from("eve@adventure.com"),
-            profile_picture_url: String::from("https://i.pravatar.cc/150?u=eve@adventure.com"),
-        },
-        User {
-            id: String::from("6"),
-            username: String::from("frankie_music"),
-            mail: String::from("frankie@music.com"),
-            profile_picture_url: String::new()
-        },
-        User {
-            id: String::from("7"),
-            username: String::from("grace_hopper"),
-            mail: String::from("grace@hopper.com"),
-            profile_picture_url: String::from("https://i.pravatar.cc/150?u=grace@hopper.com"),
-        },
-        User {
-            id: String::from("8"),
-            username: String::from("hank_punny"),
-            mail: String::from("hank@pun.com"),
-            profile_picture_url: String::from("https://i.pravatar.cc/150?u=hank@pun.com"),
-        },
-        User {
-            id: String::from("9"),
-            username: String::from("ivy_lee"),
-            mail: String::from("ivy@leaf.com"),
-            profile_picture_url: String::new()
-        },
-        User {
-            id: String::from("10"),
-            username: String::from("jack_sparrow"),
-            mail: String::from("jack@caribbean.com"),
-            profile_picture_url: String::from("https://i.pravatar.cc/150?u=jack@caribbean.com"),
-        },
-    ];
 }

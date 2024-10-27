@@ -172,6 +172,7 @@ impl JWTConfiguration {
         let validation = Validation::new(self.algorithm);
         let split_token = token.split(" ");
         let token = split_token.last().unwrap_or("");
+        debug!("Token {}", token);
 
         let token_data = jsonwebtoken::decode::<AuthClaims>(
             token,                      
