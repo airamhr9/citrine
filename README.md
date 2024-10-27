@@ -29,6 +29,7 @@ This is at the moment a personal learning project.
     * [Static file serving](#static-file-serving)
     * [Templates](#templates)
     * [Security](#security)
+    * [Request middleware and response interceptor](#request-middlewares-and-response-interceptor)
 * [To Do Before MVP](#to-do-before-mvp)
 * [Planned features](#planned-features)
 
@@ -189,18 +190,27 @@ fn main() -> Result<(), ServerError> {
 }
 ```
 
-### Request and response interceptor after a request is completed
+### Request middlewares and response interceptor
 
-For logging or other purposes, Citrine provides an interceptor function that will be executed
-after every request, giving read access to the request and response. In the future, an API for 
-defining chained middleware functions to interact with a request before it reaches a request handler
-will be included.
-
+For logging or other purposes, Citrine provides two tools, request middlewares and a response interceptor function.
+Request middlewares will be executed just before a request reaches the handler, allowing you to log it or 
+modify it as you please. The response_interceptor function will be executed after every request, 
+giving read access to the request and response. 
 ```rust
 fn main() -> Result<(), ServerError> {
     Application::<Context>::builder()
         ...
-        .interceptor(|request, response| {
+        .request_middleware(
+            RequestMiddleware::new(|request| {
+                debug!("First middleware {:?}", request);
+                request
+            })
+            .then(|request| {
+                debug!("Second middleware {:?}", request);
+                request
+            }),
+        )
+        .response_interceptor(|request, response| {
             let user = if let Some(claims) = request.auth_result.get_claims() {
                 claims
                     .name
@@ -250,5 +260,4 @@ issues page for a more precise context.
 
 - [ ] GraphQL support
 - [ ] DEV UI
-- [ ] Request middleware support
 - [ ] Use a new HTTP Server instead of Hyper

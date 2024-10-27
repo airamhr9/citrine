@@ -10,6 +10,7 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 
 use crate::error::{ErrorType, RequestError, ServerError};
+use crate::middleware::RequestMiddleware;
 use crate::request::{Request, RequestMetadata}; 
 use crate::response::Response;
 use crate::router::InternalRouter;
@@ -17,10 +18,11 @@ use crate::security::{AuthResult, SecurityConfiguration};
 use crate::static_file_server::StaticFileServer;
 
 pub struct RequestPipelineConfiguration<T: 'static + Send + Sync> {
-    interceptor: fn(&Request, &Response),
+    response_interceptor: fn(&Request, &Response),
     router: InternalRouter<T>,
     security_configuration: SecurityConfiguration,
     static_file_server: StaticFileServer,
+    request_middleware: RequestMiddleware,
     context: Arc<T> 
 }
 
@@ -29,17 +31,19 @@ where
     T: 'static + Send + Sync,
 {
     pub fn new(
-        interceptor: fn(&Request, &Response),
+        response_interceptor: fn(&Request, &Response),
         router: InternalRouter<T>,
         security_configuration: SecurityConfiguration,
         static_file_server: StaticFileServer,
+        request_middleware: RequestMiddleware,
         context: T
     ) -> Self {
         RequestPipelineConfiguration {
-            interceptor,
+            response_interceptor,
             router,
             security_configuration,
             static_file_server,
+            request_middleware,
             context: Arc::new(context)
         }
     }
@@ -144,9 +148,10 @@ async fn handle_request<T: Send + Sync + 'static>(
             .to_response()
             .try_into();
     }
-    let internal_request = internal_request_res.unwrap();
+    // Fourth, we execute the defined middlewares before reaching the router to get the request
+    let internal_request = config.request_middleware.process(internal_request_res.unwrap());
 
-    // Fourth, use the router to get the REST request result
+    // Fifth, use the router to get the REST request result
     let router_result = config.router.run(internal_request, config.context.clone());
     if let Err(e) = router_result {
         return e.to_response().try_into();
@@ -155,8 +160,8 @@ async fn handle_request<T: Send + Sync + 'static>(
     // input, as the path variables are matched inside.
     let (internal_request, response) = router_result.unwrap();
 
-    // Lastly, execute the configured interceptor
-    (config.interceptor)(&internal_request, &response);
+    // Lastly, execute the configured response interceptor
+    (config.response_interceptor)(&internal_request, &response);
 
     response.try_into()
 }

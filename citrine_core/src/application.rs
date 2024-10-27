@@ -2,14 +2,7 @@ use log::info;
 use tera::Tera;
 
 use crate::{
-    error::ServerError,
-    request::Request,
-    response::Response,
-    router::{InternalRouter, Router},
-    security::SecurityConfiguration,
-    server::RequestPipelineConfiguration,
-    static_file_server::StaticFileServer,
-    views,
+    error::ServerError, middleware::RequestMiddleware, request::Request, response::Response, router::{InternalRouter, Router}, security::SecurityConfiguration, server::RequestPipelineConfiguration, static_file_server::StaticFileServer, views
 };
 
 pub struct Application<T: Send + Sync + 'static> {
@@ -17,7 +10,8 @@ pub struct Application<T: Send + Sync + 'static> {
     version: String,
     port: u16,
     context: T,
-    interceptor: fn(&Request, &Response),
+    request_middleware: RequestMiddleware,
+    response_interceptor: fn(&Request, &Response),
     router: InternalRouter<T>,
     load_templates: bool,
     configure_tera: fn(Tera) -> Tera,
@@ -50,10 +44,11 @@ where
         crate::server::start(
             self.port,
             RequestPipelineConfiguration::new(
-                self.interceptor,
+                self.response_interceptor,
                 self.router,
                 self.security_configuration,
                 self.static_file_server,
+                self.request_middleware,
                 self.context,
             ),
         )
@@ -68,7 +63,8 @@ pub struct ApplicationBuilder<T: Send + Sync + 'static> {
     version: String,
     port: u16,
     context: T,
-    interceptor: fn(&Request, &Response),
+    request_middleware: RequestMiddleware,
+    response_interceptor: fn(&Request, &Response),
     router: Router<T>,
     load_templates: bool,
     configure_tera: fn(Tera) -> Tera,
@@ -95,8 +91,8 @@ where
         self
     }
 
-    pub fn interceptor(mut self, interceptor: fn(&Request, &Response)) -> ApplicationBuilder<T> {
-        self.interceptor = interceptor;
+    pub fn response_interceptor(mut self, response_interceptor: fn(&Request, &Response)) -> ApplicationBuilder<T> {
+        self.response_interceptor = response_interceptor;
         self
     }
 
@@ -141,6 +137,11 @@ where
         self
     }
 
+    pub fn request_middleware(mut self, request_middleware: RequestMiddleware) -> Self {
+        self.request_middleware = request_middleware;
+        self
+    }
+
     pub async fn start(self) -> Result<(), ServerError> {
         let internal_router_res = InternalRouter::from(self.router);
         if let Err(e) = internal_router_res {
@@ -151,7 +152,8 @@ where
             version: self.version,
             port: self.port,
             context: self.context,
-            interceptor: self.interceptor,
+            request_middleware: self.request_middleware,
+            response_interceptor: self.response_interceptor,
             router: internal_router_res.unwrap(),
             load_templates: self.load_templates,
             configure_tera: self.configure_tera,
@@ -172,9 +174,10 @@ where
             name: "Citrine Application".to_string(),
             version: "0.0.1".to_string(),
             port: 8080,
-            interceptor: |_, _| {},
-            router: Router::new(),
             context: T::default(),
+            request_middleware: RequestMiddleware::default(),
+            response_interceptor: |_, _| {},
+            router: Router::new(),
             load_templates: false,
             configure_tera: |t| t,
             security_configuration: SecurityConfiguration::new(),

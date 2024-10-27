@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use citrine_core::application::Application;
 use citrine_core::jsonwebtoken::Algorithm;
+use citrine_core::middleware::RequestMiddleware;
 use citrine_core::request::Request;
 use citrine_core::response::Response;
 use citrine_core::security::{
@@ -38,7 +39,7 @@ async fn main() -> Result<(), ServerError> {
         .name("Citrine sample application")
         .version("0.0.1")
         .port(8080)
-        .interceptor(|request, response| {
+        .response_interceptor(|request, response| {
             let user = if let Some(claims) = request.auth_result.get_claims() {
                 claims
                     .name

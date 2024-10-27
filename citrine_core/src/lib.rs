@@ -12,6 +12,7 @@ mod router;
 mod error;
 mod views;
 pub mod security;
+pub mod middleware;
 pub mod request;
 pub mod response;
 pub mod application;
