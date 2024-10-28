@@ -60,6 +60,26 @@ where
         });
         self
     }
+
+    pub fn get(self, path: &str, handler: RequestHandler<T>) -> Self {
+        self.add_route(Method::GET, path, handler)
+    }
+
+    pub fn post(self, path: &str, handler: RequestHandler<T>) -> Self {
+        self.add_route(Method::POST, path, handler)
+    }
+
+    pub fn put(self, path: &str, handler: RequestHandler<T>) -> Self {
+        self.add_route(Method::PUT, path, handler)
+    }
+
+    pub fn patch(self, path: &str, handler: RequestHandler<T>) -> Self {
+        self.add_route(Method::PATCH, path, handler)
+    }
+
+    pub fn delete(self, path: &str, handler: RequestHandler<T>) -> Self {
+        self.add_route(Method::DELETE, path, handler)
+    }
 }
 
 impl<T> Default for Router<T>
@@ -72,7 +92,7 @@ where
 }
 
 pub struct InternalRouter<T: Send + Sync + 'static> {
-    routes: HashMap<Method, HashMap<String, RouterNode<T>>>
+    routes: HashMap<Method, HashMap<String, RouterNode<T>>>,
 }
 
 pub struct RouterNode<T: Send + Sync + 'static> {
@@ -87,7 +107,7 @@ where
 {
     pub fn new() -> InternalRouter<T> {
         InternalRouter {
-            routes: HashMap::new()
+            routes: HashMap::new(),
         }
     }
 
@@ -174,7 +194,11 @@ where
     //
     // The point of returning here as an error is to both avoid calling the response interceptor
     // in the case of an error and to give the flexibility to later on add a global error handler
-    pub fn run(&self, mut req: Request, context: Arc<T>) -> Result<(Request, Response), RequestError> {
+    pub fn run(
+        &self,
+        mut req: Request,
+        context: Arc<T>,
+    ) -> Result<(Request, Response), RequestError> {
         let mut path_variables = HashMap::<String, String>::new();
 
         let method_map = self.routes.get(&req.method);
@@ -273,24 +297,48 @@ mod tests {
         }
 
         let uri1 = Uri::from_static("http://domain.com/hello");
-        let req1: Request = Request::new(Method::GET, uri1, "Body".to_string(), HeaderMap::new(), AuthResult::Allowed);
+        let req1: Request = Request::new(
+            Method::GET,
+            uri1,
+            "Body".to_string(),
+            HeaderMap::new(),
+            AuthResult::Allowed,
+        );
         let uri2 = Uri::from_static("http://domain.com/hello/other");
-        let req2: Request = Request::new(Method::POST, uri2, "Body".to_string(), HeaderMap::new(), AuthResult::Allowed);
+        let req2: Request = Request::new(
+            Method::POST,
+            uri2,
+            "Body".to_string(),
+            HeaderMap::new(),
+            AuthResult::Allowed,
+        );
         let uri3 = Uri::from_static("http://domain.com/hi/other");
-        let req3: Request = Request::new(Method::GET, uri3, "Body".to_string(), HeaderMap::new(), AuthResult::Allowed);
+        let req3: Request = Request::new(
+            Method::GET,
+            uri3,
+            "Body".to_string(),
+            HeaderMap::new(),
+            AuthResult::Allowed,
+        );
         let uri4 = Uri::from_static("http://domain.com/hi/other");
-        let req4: Request = Request::new(Method::PUT, uri4, "Body".to_string(), HeaderMap::new(), AuthResult::Allowed);
+        let req4: Request = Request::new(
+            Method::PUT,
+            uri4,
+            "Body".to_string(),
+            HeaderMap::new(),
+            AuthResult::Allowed,
+        );
 
-        let context = Arc::new(ContextTest{});
+        let context = Arc::new(ContextTest {});
 
-        let _ = router.run(req1, context.clone()); 
-        let _ = router.run(req2, context.clone());  
-        let _ = router.run(req3, context.clone()); 
-        let _ = router.run(req4, context.clone());  
+        let _ = router.run(req1, context.clone());
+        let _ = router.run(req2, context.clone());
+        let _ = router.run(req3, context.clone());
+        let _ = router.run(req4, context.clone());
     }
- 
+
     fn print(map: &HashMap<String, RouterNode<ContextTest>>, tabs: usize) {
-        for (key2, value2) in map { 
+        for (key2, value2) in map {
             println!(
                 "{} {}: {:#?}",
                 "  ".repeat(tabs),

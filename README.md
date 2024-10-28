@@ -51,7 +51,8 @@ in this repository.
 #### REST request handling and routing, using [Hyper](https://hyper.rs/) as the HTTP server
 
 The Router struct will contain all the endpoints and handlers for your application. 
-Routers can be nested, providing flexibility when designing your API.
+Routers can be nested, providing flexibility when designing your API. We can use helpers
+for common HTTP methods (GET, POST, PUT, PATCH, DELETE) or pass them as a parameter.
 
 ```rust
 // Application definition
@@ -60,7 +61,7 @@ fn main() -> Result<(), ServerError> {
         ...
         .router(
             Router::new()
-                .add_route(Method::GET, "", base_path_controller)
+                .get("", base_path_controller)
                 .add_router(Router::base_path("/api").add_router(user_router()))
         )
         .start()
@@ -76,11 +77,13 @@ fn base_path_controller(context: Arc<Context>, _: Request) -> Response {
 // Router definition
 fn user_router() -> Router<Context> {
     Router::base_path("/users")
+        // Complete route definition with HTTP method as a parameter
         .add_route(Method::GET, "", find_all_users_controller)
-        .add_route(Method::GET, "/:id", find_by_id_controller)
-        .add_route(Method::DELETE, "/:id", delete_by_id_controller)
-        .add_route(Method::PUT, "/:id", update_user_controler)
-        .add_route(Method::POST, "", create_user_controler)
+        // Helpers for common HTTP methods
+        .get("/:id", find_by_id_controller)
+        .put("/:id", update_user_controler)
+        .post("", create_user_controler)
+        .delete("/:id", delete_by_id_controller)
 }
 ```
 

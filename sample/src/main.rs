@@ -101,7 +101,7 @@ async fn main() -> Result<(), ServerError> {
         )
         .router(
             Router::new()
-                .add_route(Method::GET, "", base_path_controller)
+                .get("", base_path_controller)
                 .add_router(Router::base_path("/api").add_router(user_router())),
         )
         .start()
@@ -261,10 +261,10 @@ fn base_path_controller(context: Arc<Context>, _: Request) -> Response {
 fn user_router() -> Router<Context> {
     Router::base_path("/users")
         .add_route(Method::GET, "", find_all_users_controller)
-        .add_route(Method::GET, "/:id", find_by_id_controller)
-        .add_route(Method::DELETE, "/:id", delete_by_id_controller)
-        .add_route(Method::PUT, "/:id", update_user_controler)
-        .add_route(Method::POST, "", create_user_controler)
+        .get("/:id", find_by_id_controller)
+        .put("/:id", update_user_controler)
+        .post("", create_user_controler)
+        .delete("/:id", delete_by_id_controller)
 }
 
 /*
