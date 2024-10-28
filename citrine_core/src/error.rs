@@ -59,9 +59,11 @@ impl RequestError {
             cause: None,
         }
     }
+}
 
-    pub fn to_response(self) -> Response {
-        let status_code = match self.error_type {
+impl From<RequestError> for Response {
+    fn from(error: RequestError) -> Self {
+        let status_code = match error.error_type {
             ErrorType::NotFound => StatusCode::NOT_FOUND,
             ErrorType::MethodNotAllowed => StatusCode::METHOD_NOT_ALLOWED,
             ErrorType::Internal => StatusCode::INTERNAL_SERVER_ERROR,
@@ -71,9 +73,9 @@ impl RequestError {
             | ErrorType::MissingBody
             | ErrorType::FailedValidation(_) => StatusCode::BAD_REQUEST,
         };
-        let cause = self
+        let cause = error
             .cause
-            .unwrap_or(self.error_type.default_message().to_string());
+            .unwrap_or(error.error_type.default_message().to_string());
 
         if log::log_enabled!(log::Level::Debug) {
             error!("Response status: {} cause: {}", status_code, cause);
@@ -90,7 +92,7 @@ impl RequestError {
         };
 
         let validation_errors =
-            if let ErrorType::FailedValidation(validation_errors) = self.error_type {
+            if let ErrorType::FailedValidation(validation_errors) = error.error_type {
                 Some(validation_errors)
             } else {
                 None

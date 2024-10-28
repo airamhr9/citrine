@@ -180,8 +180,8 @@ fn main() -> Result<(), ServerError> {
                     MethodMatcher::Multiple(vec![Method::POST, Method::PUT, Method::DELETE]),
                     "/api/*",
                     SecurityAction::Authenticate(Authenticator::JWT(JWTConfiguration::new(
-                        jwt_secret,
-                        Algorithm::HS256,
+                        JWTSecret::base64_encoded(jwt_secret),
+                        Algorithm::HS256
                     ))),
                 )
                 // Any other request is allowed. This is the default behaviour if this line is

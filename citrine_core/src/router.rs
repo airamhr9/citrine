@@ -190,23 +190,21 @@ where
         Ok(())
     }
 
-    // All request errors are turned into responses in the caller function
-    //
-    // The point of returning here as an error is to both avoid calling the response interceptor
-    // in the case of an error and to give the flexibility to later on add a global error handler
-    pub fn run(
-        &self,
-        mut req: Request,
-        context: Arc<T>,
-    ) -> Result<(Request, Response), RequestError> {
+    pub fn run(&self, mut req: Request, context: Arc<T>) -> (Request, Response) {
         let mut path_variables = HashMap::<String, String>::new();
 
         let method_map = self.routes.get(&req.method);
         if method_map.is_none() {
-            return Err(RequestError::with_message(
-                ErrorType::MethodNotAllowed,
-                &format!("{} {}", req.method, req.uri.path()),
-            ));
+            let path = req.uri.path().to_owned();
+            let method = req.method.clone();
+            return (
+                req,
+                RequestError::with_message(
+                    ErrorType::MethodNotAllowed,
+                    &format!("{} {}", method, &path),
+                )
+                .into(),
+            );
         }
 
         let routes: Vec<String> = req.uri.path().split("/").map(|s| s.to_string()).collect();
@@ -220,10 +218,11 @@ where
 
                 //can't match this route
                 if opt_node.is_none() {
-                    return Err(RequestError::with_message(
+                    let path = req.uri.path().to_owned();
+                    return (req, RequestError::with_message(
                         ErrorType::NotFound,
-                        req.uri.path(),
-                    ));
+                        &path,
+                    ).into());
                 }
             }
             let node = opt_node.unwrap();
@@ -234,22 +233,23 @@ where
             if i == routes.len() - 1 {
                 if let Some(function) = node.handler.as_ref() {
                     req.set_path_variables(path_variables);
-                    //optimize this
-                    return Ok((req.clone(), function(context.clone(), req)));
+                    return (req.clone(), function(context.clone(), req));
                 } else {
-                    return Err(RequestError::with_message(
+                    let path = req.uri.path().to_owned();
+                    return (req, RequestError::with_message(
                         ErrorType::NotFound,
-                        req.uri.path(),
-                    ));
+                        &path,
+                    ).into());
                 }
             }
             current = &node.routes;
         }
 
-        return Err(RequestError::with_message(
+        let path = req.uri.path().to_owned();
+        (req, RequestError::with_message(
             ErrorType::NotFound,
-            req.uri.path(),
-        ));
+            &path,
+        ).into())
     }
 }
 

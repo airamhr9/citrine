@@ -10,7 +10,7 @@ use citrine_core::request::{Accepts, ContentType, Request};
 use citrine_core::request_matcher::MethodMatcher;
 use citrine_core::response::Response;
 use citrine_core::security::{
-    Authenticator, JWTConfiguration, SecurityAction, SecurityConfiguration,
+    Authenticator, JWTConfiguration, JWTSecret, SecurityAction, SecurityConfiguration
 };
 use citrine_core::static_file_server::StaticFileServer;
 use citrine_core::{
@@ -34,7 +34,7 @@ async fn main() -> Result<(), ServerError> {
     env_logger::init();
 
     // This is a dummy JWT secret key for testing purposes. You should generate one and use it via environment variables
-    let jwt_secret = "NTNv7j0TuYARvmNMmWXo6fKvM4o6nv/aUi9ryX38ZH+L1bkrnD1ObOQ8JAUmHCBq7Iy7otZcyAagBLHVKvvYaIpmMuxmARQ97jUVG16Jkpkp1wXOPsrF9zwew6TpczyHkHgX5EuLg2MeBuiT/qJACs1J0apruOOJCg/gOtkjB4c=";
+    let jwt_secret = "dGhpcy1pcy1hLW1vY2stc2lnbmF0dXJlLWtleS10aGF0LXdpbGwtYmUtYmFzZS02NC1lbmNvZGVk";
 
     Application::<Context>::builder()
         .name("Citrine sample application")
@@ -90,8 +90,8 @@ async fn main() -> Result<(), ServerError> {
                     MethodMatcher::Multiple(vec![Method::POST, Method::PUT, Method::DELETE]),
                     "/api/*",
                     SecurityAction::Authenticate(Authenticator::JWT(JWTConfiguration::new(
-                        jwt_secret,
-                        Algorithm::HS256,
+                        JWTSecret::base64_encoded(jwt_secret),
+                        Algorithm::HS256
                     ))),
                 )
                 // Any other request is allowed. This is the default behaviour if this line is
@@ -326,7 +326,7 @@ fn create_user_controler(context: Arc<Context>, req: Request) -> Response {
             ContentType::FormUrlEncoded,
         ]));
     if let Err(e) = read_body_res {
-        return e.to_response();
+        return e.into();
     }
 
     let user = read_body_res.unwrap();
@@ -345,7 +345,7 @@ fn create_user_controler(context: Arc<Context>, req: Request) -> Response {
 fn update_user_controler(context: Arc<Context>, req: Request) -> Response {
     let read_body_res: Result<UpdateUser, RequestError> = req.get_json_body_validated();
     if let Err(e) = read_body_res {
-        return e.to_response();
+        return e.into();
     }
 
     let user = read_body_res.unwrap();

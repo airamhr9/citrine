@@ -11,7 +11,7 @@ use tokio::net::TcpListener;
 
 use crate::error::{ErrorType, RequestError, ServerError};
 use crate::middleware::RequestMiddleware;
-use crate::request::{Request, RequestMetadata}; 
+use crate::request::{Request, RequestMetadata};
 use crate::response::Response;
 use crate::router::InternalRouter;
 use crate::security::{AuthResult, SecurityConfiguration};
@@ -23,7 +23,7 @@ pub struct RequestPipelineConfiguration<T: 'static + Send + Sync> {
     security_configuration: SecurityConfiguration,
     static_file_server: StaticFileServer,
     request_middleware: RequestMiddleware,
-    context: Arc<T> 
+    context: Arc<T>,
 }
 
 impl<T> RequestPipelineConfiguration<T>
@@ -36,7 +36,7 @@ where
         security_configuration: SecurityConfiguration,
         static_file_server: StaticFileServer,
         request_middleware: RequestMiddleware,
-        context: T
+        context: T,
     ) -> Self {
         RequestPipelineConfiguration {
             response_interceptor,
@@ -44,7 +44,7 @@ where
             security_configuration,
             static_file_server,
             request_middleware,
-            context: Arc::new(context)
+            context: Arc::new(context),
         }
     }
 }
@@ -129,9 +129,9 @@ async fn handle_request<T: Send + Sync + 'static>(
     // First, we check if the request is authorized
     let auth_result = config.security_configuration.authorize(&request_metadata);
     if auth_result == AuthResult::Denied {
-        return RequestError::with_message(ErrorType::Unauthorized, request_metadata.uri.path())
-            .to_response()
-            .try_into();
+        let response: Response =
+            RequestError::with_message(ErrorType::Unauthorized, request_metadata.uri.path()).into();
+        return response.try_into();
     }
 
     // Second, we try to serve the request as a static file request
@@ -144,21 +144,20 @@ async fn handle_request<T: Send + Sync + 'static>(
     // Third, map the request_metadata into the request object that will be user visible
     let internal_request_res = Request::from_metadata_and_auth(request_metadata, auth_result).await;
     if let Err(e) = internal_request_res {
-        return RequestError::with_message(ErrorType::RequestBodyUnreadable, &e.to_string())
-            .to_response()
+        let response: Response = RequestError::with_message(ErrorType::RequestBodyUnreadable, &e.to_string())
+            .into();
+        return response
             .try_into();
     }
     // Fourth, we execute the defined middlewares before reaching the router to get the request
-    let internal_request = config.request_middleware.process(internal_request_res.unwrap());
+    let internal_request = config
+        .request_middleware
+        .process(internal_request_res.unwrap());
 
     // Fifth, use the router to get the REST request result
-    let router_result = config.router.run(internal_request, config.context.clone());
-    if let Err(e) = router_result {
-        return e.to_response().try_into();
-    }
-    // we return the request from the run function because it will be different from the one we
+    // We return the request from the run function because it will be different from the one we
     // input, as the path variables are matched inside.
-    let (internal_request, response) = router_result.unwrap();
+    let (internal_request, response) = config.router.run(internal_request, config.context.clone());
 
     // Lastly, execute the configured response interceptor
     (config.response_interceptor)(&internal_request, &response);
