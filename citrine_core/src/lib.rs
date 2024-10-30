@@ -5,7 +5,7 @@ pub use jsonwebtoken;
 pub use hyper::{body::Bytes, Method, Uri, StatusCode, header};
 
 pub use error::{ServerError, RequestError, DefaultErrorResponseBody};
-pub use router::{Router, Route};
+pub use router::{Router, Route, Accepts};
 
 mod server;
 mod router;

@@ -6,16 +6,16 @@ use std::sync::Arc;
 use citrine_core::application::Application;
 use citrine_core::jsonwebtoken::Algorithm;
 use citrine_core::middleware::RequestMiddleware;
-use citrine_core::request::{Accepts, ContentType, Request};
+use citrine_core::request::{ContentType, Request};
 use citrine_core::request_matcher::MethodMatcher;
 use citrine_core::response::Response;
 use citrine_core::security::{
-    Authenticator, JWTConfiguration, JWTSecret, SecurityAction, SecurityConfiguration
+    Authenticator, JWTConfiguration, JWTSecret, SecurityAction, SecurityConfiguration,
 };
 use citrine_core::static_file_server::StaticFileServer;
 use citrine_core::{
-    self, tera, tokio, DefaultErrorResponseBody, Method, RequestError, Router, ServerError,
-    StatusCode,
+    self, tera, tokio, Accepts, DefaultErrorResponseBody, Method, RequestError, Router,
+    ServerError, StatusCode,
 };
 use mock_data::get_mock_users;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -91,7 +91,7 @@ async fn main() -> Result<(), ServerError> {
                     "/api/*",
                     SecurityAction::Authenticate(Authenticator::JWT(JWTConfiguration::new(
                         JWTSecret::base64_encoded(jwt_secret),
-                        Algorithm::HS256
+                        Algorithm::HS256,
                     ))),
                 )
                 // Any other request is allowed. This is the default behaviour if this line is
@@ -260,10 +260,15 @@ fn base_path_controller(context: Arc<Context>, _: Request) -> Response {
 
 fn user_router() -> Router<Context> {
     Router::base_path("/users")
-        .add_route(Method::GET, "", find_all_users_controller)
+        .get("", find_all_users_controller)
         .get("/:id", find_by_id_controller)
         .put("/:id", update_user_controler)
-        .post("", create_user_controler)
+        .add_route(
+            Method::POST,
+            "",
+            create_user_controler,
+            Accepts::Multiple(vec![ContentType::Json, ContentType::FormUrlEncoded]),
+        )
         .delete("/:id", delete_by_id_controller)
 }
 
@@ -320,11 +325,7 @@ fn delete_by_id_controller(context: Arc<Context>, req: Request) -> Response {
 }
 
 fn create_user_controler(context: Arc<Context>, req: Request) -> Response {
-    let read_body_res: Result<CreateUser, RequestError> =
-        req.get_body_validated(Accepts::Multiple(vec![
-            ContentType::Json,
-            ContentType::FormUrlEncoded,
-        ]));
+    let read_body_res: Result<CreateUser, RequestError> =req.get_body_validated();
     if let Err(e) = read_body_res {
         return e.into();
     }
@@ -343,7 +344,7 @@ fn create_user_controler(context: Arc<Context>, req: Request) -> Response {
 }
 
 fn update_user_controler(context: Arc<Context>, req: Request) -> Response {
-    let read_body_res: Result<UpdateUser, RequestError> = req.get_json_body_validated();
+    let read_body_res: Result<UpdateUser, RequestError> = req.get_body_validated();
     if let Err(e) = read_body_res {
         return e.into();
     }

@@ -136,37 +136,31 @@ impl DefaultErrorResponseBody {
 
 impl From<DeserializationError> for RequestError {
     fn from(error: DeserializationError) -> Self {
-        match error {
-            DeserializationError::MalformedBody(cause) => {
-                RequestError::with_message(ErrorType::RequestBodyUnreadable, &cause)
-            }
-            DeserializationError::InvalidContentType => {
-                RequestError::default(ErrorType::UnsupportedMediaType)
-            }
-        }
+        RequestError::with_message(ErrorType::RequestBodyUnreadable, &error.cause)
     }
 }
 
 #[derive(Debug, Deserialize, Display)]
-pub enum DeserializationError {
-    MalformedBody(String),
-    InvalidContentType,
+pub struct DeserializationError {
+    cause: String,
 }
 
 impl DeserializationError {
-    pub fn malformed_body(e: &dyn std::error::Error) -> Self {
-        DeserializationError::MalformedBody(e.to_string())
+    pub fn new(e: &dyn std::error::Error) -> Self {
+        DeserializationError {
+            cause: e.to_string(),
+        }
     }
 }
 
 impl From<serde_json::Error> for DeserializationError {
     fn from(value: serde_json::Error) -> Self {
-        DeserializationError::malformed_body(&value)
+        DeserializationError::new(&value)
     }
 }
 
 impl From<serde_html_form::de::Error> for DeserializationError {
     fn from(value: serde_html_form::de::Error) -> Self {
-        DeserializationError::malformed_body(&value)
+        DeserializationError::new(&value)
     }
 }

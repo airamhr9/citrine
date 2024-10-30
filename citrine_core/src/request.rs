@@ -3,7 +3,6 @@ use std::{collections::HashMap, io::Read};
 use http_body_util::BodyExt;
 use hyper::{
     body::{Buf, Incoming},
-    header::CONTENT_TYPE,
     HeaderMap, Method, Uri,
 };
 use serde::de::DeserializeOwned;
@@ -40,6 +39,7 @@ pub struct Request {
     pub path_variables: HashMap<String, String>,
     pub headers: HeaderMap,
     pub auth_result: AuthResult,
+    content_type: Option<ContentType>,
 }
 
 impl Request {
@@ -50,10 +50,10 @@ impl Request {
         headers: HeaderMap,
         auth_result: AuthResult,
     ) -> Self {
-        let body = if method != Method::GET {
-            Some(body)
-        } else {
+        let body = if method == Method::GET || body.is_empty() {
             None
+        } else {
+            Some(body)
         };
         Request {
             method,
@@ -62,6 +62,7 @@ impl Request {
             path_variables: HashMap::new(),
             headers,
             auth_result,
+            content_type: None,
         }
     }
 
@@ -90,33 +91,23 @@ impl Request {
         self.path_variables = path_variables;
     }
 
+    pub fn set_content_type(&mut self, content_type: ContentType) {
+        self.content_type = Some(content_type);
+    }
+
     pub fn get_body_raw(&self) -> &Option<String> {
         &self.body
     }
 
-    pub fn get_json_body<T>(&self) -> Result<T, RequestError>
+    pub fn get_body<T>(&self) -> Result<T, RequestError>
     where
         T: DeserializeOwned,
     {
-        self.get_body(Accepts::One(ContentType::Json))
-    }
-
-    pub fn get_json_body_validated<T>(&self) -> Result<T, RequestError>
-    where
-        T: DeserializeOwned + Validate,
-    {
-        self.get_body_validated(Accepts::One(ContentType::Json))
-    }
-
-    pub fn get_body<T>(&self, accept_type: Accepts) -> Result<T, RequestError>
-    where
-        T: DeserializeOwned,
-    {
-        if self.body.is_none() {
+        if self.body.is_none() || self.content_type.is_none() {
             return Err(RequestError::default(ErrorType::MissingBody));
         }
 
-        let body_res: Result<T, DeserializationError> = accept_type.parse_body(self);
+        let body_res: Result<T, DeserializationError> = self.content_type.unwrap().parse(&self.body);
         if let Err(e) = body_res {
             return Err(e.into());
         }
@@ -124,20 +115,11 @@ impl Request {
         Ok(body_res.unwrap())
     }
 
-    pub fn get_body_validated<T>(&self, accept_type: Accepts) -> Result<T, RequestError>
+    pub fn get_body_validated<T>(&self) -> Result<T, RequestError>
     where
         T: DeserializeOwned + Validate,
     {
-        if self.body.is_none() {
-            return Err(RequestError::default(ErrorType::MissingBody));
-        }
-
-        let body_res: Result<T, DeserializationError> = accept_type.parse_body(self);
-        if let Err(e) = body_res {
-            return Err(e.into());
-        }
-
-        let body = body_res.unwrap();
+        let body: T = self.get_body()?;
 
         if let Err(e) = body.validate() {
             return Err(RequestError::default(ErrorType::FailedValidation(e)));
@@ -147,70 +129,30 @@ impl Request {
     }
 }
 
-pub enum Accepts {
-    One(ContentType),
-    Multiple(Vec<ContentType>),
-}
 
-impl Accepts {
-    fn get_matching(&self, req: &Request) -> Option<ContentType> {
-        if let Some(content_type) = req.headers.get(CONTENT_TYPE) {
-            let content_type = content_type.to_str().unwrap();
-            return match self {
-                Accepts::One(encoding) => {
-                    if encoding.is_valid(content_type) {
-                        Some(encoding.clone())
-                    } else {
-                        None
-                    }
-                }
-                Accepts::Multiple(encodings) => {
-                    for encoding in encodings {
-                        if encoding.is_valid(content_type) {
-                            return Some(encoding.clone());
-                        }
-                    }
-                    None
-                }
-            };
-        }
-
-        None
-    }
-
-    fn parse_body<T>(&self, req: &Request) -> Result<T, DeserializationError>
-    where
-        T: DeserializeOwned,
-    {
-        let matching_encoding = self.get_matching(req);
-        if matching_encoding.is_none() {
-            return Err(DeserializationError::InvalidContentType);
-        }
-
-        matching_encoding.unwrap().parse(req)
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum ContentType {
     Json,
     FormUrlEncoded,
 }
 
 impl ContentType {
-    fn is_valid(&self, content_type: &str) -> bool {
-        content_type
-            == match self {
-                Self::Json => mime::APPLICATION_JSON.to_string(),
-                Self::FormUrlEncoded => mime::APPLICATION_WWW_FORM_URLENCODED.to_string(),
-            }
+    pub fn is_valid(&self, content_type: &str) -> bool {
+        content_type == self.as_header_value()
     }
 
-    fn parse<T>(&self, req: &Request) -> Result<T, DeserializationError>
+    pub fn as_header_value(&self) -> String {
+        match self {
+            Self::Json => mime::APPLICATION_JSON.to_string(),
+            Self::FormUrlEncoded => mime::APPLICATION_WWW_FORM_URLENCODED.to_string(),
+        }
+    }
+
+    pub fn parse<T>(&self, body: &Option<String>) -> Result<T, DeserializationError>
     where
         T: DeserializeOwned,
     {
-        let body_str = req.body.as_ref().unwrap();
+        let body_str = body.as_ref().unwrap();
         match self {
             ContentType::Json => {
                 let res: Result<T, _> = serde_json::from_str(body_str);

@@ -52,7 +52,10 @@ in this repository.
 
 The Router struct will contain all the endpoints and handlers for your application. 
 Routers can be nested, providing flexibility when designing your API. We can use helpers
-for common HTTP methods (GET, POST, PUT, PATCH, DELETE) or pass them as a parameter.
+for common HTTP methods (GET, POST, PUT, PATCH, DELETE) or pass them as a parameter. The
+accepted Content-Type headers are defined for each route, which can be one, multiple or none. 
+If you use the helper methods, the accepted Content-Type will be by default only JSON for 
+POST, PUT, PATCH and DELETE, and None for GET.
 
 ```rust
 // Application definition
@@ -77,12 +80,17 @@ fn base_path_controller(context: Arc<Context>, _: Request) -> Response {
 // Router definition
 fn user_router() -> Router<Context> {
     Router::base_path("/users")
-        // Complete route definition with HTTP method as a parameter
-        .add_route(Method::GET, "", find_all_users_controller)
-        // Helpers for common HTTP methods
+        // Complete route definition with HTTP method and accepted types as a parameters
+        .add_route(
+            Method::POST,
+            "",
+            create_user_controler,
+            Accepts::Multiple(vec![ContentType::Json, ContentType::FormUrlEncoded]),
+        )
+        // Helpers for common HTTP methods that only receive JSON
+        .get("", find_all_users_controller)
         .get("/:id", find_by_id_controller)
         .put("/:id", update_user_controler)
-        .post("", create_user_controler)
         .delete("/:id", delete_by_id_controller)
 }
 ```
@@ -196,9 +204,10 @@ fn main() -> Result<(), ServerError> {
 
 ### Multiple request types
 
-When reading a request body, we can specify the content types we support. We can support multiple 
-content types in the same endpoint, like an URL encoded form and JSON. We can use methods to 
-get the body specifying the accepted content types or the helper methods for JSON.
+When creating a route, we can specify the content types we support. We can support multiple 
+content types in the same endpoint, like an URL encoded form and JSON. If the Content-Type 
+does not match, a 415 error will be automatically sent to the client. In the handler however,
+reading the body is transparent to the Content-Type specified.
 
 We can also specify whether we want to validate the body when reading it. For this feature
 to work, the request body struct must derive Validate.
@@ -207,13 +216,7 @@ to work, the request body struct must derive Validate.
 
 // Create user handler
 fn create_user_controler(context: Arc<Context>, req: Request) -> Response {
-    // Here we state when reading the body that we support either JSON or an URL encoded form,
-    // and want to execute request validation if reading the body was succesful 
-    let read_body_res: Result<CreateUser, RequestError> =
-        req.get_body_validated(Accepts::Multiple(vec![
-            ContentType::Json,
-            ContentType::FormUrlEncoded,
-        ]));
+    let read_body_res: Result<CreateUser, RequestError> = req.get_body_validated();
     if let Err(e) = read_body_res {
         return e.to_response();
     }
@@ -222,9 +225,7 @@ fn create_user_controler(context: Arc<Context>, req: Request) -> Response {
 
 // Update user handler
 fn update_user_controler(context: Arc<Context>, req: Request) -> Response {
-    // Here we use a helper function to only try to read the body as JSON
-    // and want to execute request validation if reading the body was succesful 
-    let read_body_res: Result<UpdateUser, RequestError> = req.get_json_body_validated();
+    let read_body_res: Result<UpdateUser, RequestError> = req.get_body_validated();
     if let Err(e) = read_body_res {
         return e.to_response();
     }
