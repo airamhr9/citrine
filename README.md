@@ -31,6 +31,7 @@ This is at the moment a personal learning project.
     * [Security](#security)
     * [Multiple Request Types](#multiple-request-types)
     * [Request middleware and response interceptor](#request-middlewares-and-response-interceptor)
+    * [Configuration via environment variables](#configuration-via-environment-variables)
 * [To Do Before MVP](#to-do-before-mvp)
 * [Planned features](#planned-features)
 
@@ -143,13 +144,13 @@ fn base_path_controller(context: Arc<Context>, _: Request) -> Response {
     let mut db = context.get_db_connection();
     let users_res = find_all_users(&mut db);
     if users_res.is_err() {
-        return Response::view("error.html", &json!({})).unwrap();
+        return Response::template("error.html", &json!({})).unwrap();
     }
     let users = UserListResponse {
         users: users_res.unwrap(),
     };
 
-    Response::view("index.html", &users).unwrap()
+    Response::template("index.html", &users).unwrap()
 }
 
 
@@ -281,6 +282,20 @@ fn main() -> Result<(), ServerError> {
         .await
 }
 ```
+
+### Configuration via environment variables
+
+Some basic configuration options can be set via environment variables. These are:
+
+* `CITRINE_PORT`: Sets the port the application will listen to. Default is `8080`.
+* `CITRINE_APP_NAME`: The application name that will appear on startup. If none is set it will
+use the name of the crate.
+* `CITRINE_TEMPLATES_ENABLED`: Whether the framework will load the templates on startup. Default is `false`.
+* `CITRINE_TEMPLATES_FOLDER`: The folder that contains the application templates. Default is `templates`.
+
+These configurations can also be set using the application builder. If both options are used at the same
+time, the values set in the code will prevail.
+
 --- 
 
 ## To Do Before MVP

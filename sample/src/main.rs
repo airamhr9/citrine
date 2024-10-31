@@ -38,8 +38,6 @@ async fn main() -> Result<(), ServerError> {
 
     Application::<Context>::builder()
         .name("Citrine sample application")
-        .version("0.0.1")
-        .port(8080)
         // With request middleware, we can execute a function before the request reaches
         // our handler. You can filter which function will each request use via request matchers.
         .request_middleware(
@@ -244,13 +242,13 @@ fn base_path_controller(context: Arc<Context>, _: Request) -> Response {
     let mut db = context.get_db_connection();
     let users_res = find_all_users(&mut db);
     if users_res.is_err() {
-        return Response::view("error.html", &json!({})).unwrap();
+        return Response::template("error.html", &json!({})).unwrap();
     }
     let users = UserListResponse {
         users: users_res.unwrap(),
     };
 
-    Response::view("index.html", &users).unwrap()
+    Response::template("index.html", &users).unwrap()
 }
 
 /*
@@ -260,15 +258,15 @@ fn base_path_controller(context: Arc<Context>, _: Request) -> Response {
 
 fn user_router() -> Router<Context> {
     Router::base_path("/users")
-        .get("", find_all_users_controller)
-        .get("/:id", find_by_id_controller)
-        .put("/:id", update_user_controler)
         .add_route(
             Method::POST,
             "",
             create_user_controler,
             Accepts::Multiple(vec![ContentType::Json, ContentType::FormUrlEncoded]),
         )
+        .get("", find_all_users_controller)
+        .get("/:id", find_by_id_controller)
+        .put("/:id", update_user_controler)
         .delete("/:id", delete_by_id_controller)
 }
 

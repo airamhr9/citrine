@@ -3,6 +3,8 @@ use once_cell::sync::OnceCell;
 use serde::Serialize;
 use tera::{Context, Tera, Value};
 
+use crate::configuration;
+
 static TEMPLATES: OnceCell<Tera> = OnceCell::new();
 //only for reloading on debug
 static CALLBACK: OnceCell<fn(Tera) -> Tera> = OnceCell::new();
@@ -34,8 +36,9 @@ pub fn init_templates(configure_tera: fn(Tera) -> Tera) -> Result<(), tera::Erro
 }
 
 fn load_tera() -> Tera {
-    // get this path from env variables
-    let mut tera = match Tera::new("templates/**/*") {
+    let mut template_folder = configuration::templates_folder_or_default();
+    template_folder.push_str("/**/*");
+    let mut tera = match Tera::new(&template_folder) {
         Ok(t) => t,
         Err(e) => {
             error!("Error intializing tera {}", e);

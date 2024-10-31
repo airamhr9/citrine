@@ -2,7 +2,7 @@ use log::info;
 use tera::Tera;
 
 use crate::{
-    error::ServerError, middleware::RequestMiddleware, request::Request, response::Response, router::{InternalRouter, Router}, security::SecurityConfiguration, server::RequestPipelineConfiguration, static_file_server::StaticFileServer, views
+    configuration, error::ServerError, middleware::RequestMiddleware, request::Request, response::Response, router::{InternalRouter, Router}, security::SecurityConfiguration, server::RequestPipelineConfiguration, static_file_server::StaticFileServer, templates
 };
 
 pub struct Application<T: Send + Sync + 'static> {
@@ -37,7 +37,7 @@ where
         );
 
         if self.load_templates {
-            if let Err(e) = views::init_templates(self.configure_tera) {
+            if let Err(e) = templates::init_templates(self.configure_tera) {
                 panic!("Error loading templates: {}", e);
             }
         }
@@ -171,14 +171,14 @@ where
 {
     fn default() -> ApplicationBuilder<T> {
         ApplicationBuilder {
-            name: "Citrine Application".to_string(),
-            version: "0.0.1".to_string(),
-            port: 8080,
+            name: configuration::application_name_or_default(),
+            version: configuration::version(),
+            port: configuration::port_or_default(),
             context: T::default(),
             request_middleware: RequestMiddleware::default(),
             response_interceptor: |_, _| {},
             router: Router::new(),
-            load_templates: false,
+            load_templates: configuration::templates_enabled_or_default(),
             configure_tera: |t| t,
             security_configuration: SecurityConfiguration::new(),
             static_file_server: StaticFileServer::default(),
