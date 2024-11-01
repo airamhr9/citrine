@@ -1,4 +1,6 @@
-use std::env;
+use std::{env, fs, path::Path};
+
+use log::debug;
 
 pub fn port_or_default() -> u16 {
     if let Ok(var) = env::var("CITRINE_PORT") {
@@ -35,4 +37,19 @@ pub fn templates_enabled_or_default() -> bool {
 
 pub fn templates_folder_or_default() -> String {
     env::var("CITRINE_TEMPLATES_FOLDER").unwrap_or("templates".to_string())
+}
+
+pub fn banner() -> Option<String> {
+    let banner_path = "./banner.txt";
+    if !Path::new(banner_path).is_file() {
+        None
+    } else {
+        let read_res = fs::read_to_string(banner_path);
+        if let Err(e) = read_res {
+            debug!("bannet.txt detected but it could not be read: {}", e);
+            None
+        } else {
+            Some(read_res.unwrap())
+        }
+    }
 }

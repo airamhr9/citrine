@@ -31,16 +31,20 @@ where
     }
 
     pub async fn start(self) -> Result<(), ServerError> {
-        info!(
-            "Starting application {} v{} (via Citrine)",
-            self.name, self.version
-        );
-
         if self.load_templates {
             if let Err(e) = templates::init_templates(self.configure_tera) {
                 panic!("Error loading templates: {}", e);
             }
         }
+
+        if let Some(banner) = configuration::banner() {
+            println!("{}", banner);
+        }
+        info!(
+            "Started application {} v{} (via Citrine)",
+            self.name, self.version
+        );
+
         crate::server::start(
             self.port,
             RequestPipelineConfiguration::new(
