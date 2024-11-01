@@ -32,6 +32,7 @@ This is at the moment a personal learning project.
     * [Multiple Request Types](#multiple-request-types)
     * [Request middleware and response interceptor](#request-middlewares-and-response-interceptor)
     * [Configuration via environment variables](#configuration-via-environment-variables)
+    * [Startup Banner](#startup-banner)
 * [To Do Before MVP](#to-do-before-mvp)
 * [Planned features](#planned-features)
 
@@ -292,9 +293,22 @@ Some basic configuration options can be set via environment variables. These are
 use the name of the crate.
 * `CITRINE_TEMPLATES_ENABLED`: Whether the framework will load the templates on startup. Default is `false`.
 * `CITRINE_TEMPLATES_FOLDER`: The folder that contains the application templates. Default is `templates`.
+* `CITRINE_BANNER_ENABLED`: Whether the framework will show a banner when starting the application. Default is `true`.
 
 These configurations can also be set using the application builder. If both options are used at the same
 time, the values set in the code will prevail.
+
+### Startup Banner
+
+Show a custom banner when the application starts by creating a `banner.txt` file in the root of your project.
+This can be disabled via environment variables.
+
+![image](https://github.com/user-attachments/assets/124b69c3-43da-4e78-ab09-a1c4ddf7cae2 "Default banner")
+*Default banner*
+
+![image](https://github.com/user-attachments/assets/ead37db0-fd76-4a2c-844b-0a5ea29a21be "Custom banner")
+*Custom banner*
+
 
 --- 
 

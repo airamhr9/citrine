@@ -37,8 +37,8 @@ where
             }
         }
 
-        if let Some(banner) = configuration::banner() {
-            println!("{}", banner);
+        if configuration::banner_enabled() {
+            println!("{}", configuration::banner());
         }
         info!(
             "Started application {} v{} (via Citrine)",
