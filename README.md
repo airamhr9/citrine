@@ -172,14 +172,47 @@ fn url_encode_filter(
 ```
 
 ### Security
-#### Authorization API with support for JWT
+#### Authorization API with support for OpenID Connect, simple JWT and custom configurations
 
-Citrine provides an easy API to define which endpoints you want protected, freely allowed or completely denied, 
-and currently offers suppport for JWT or a authentication method, with other options comming in the future.
+Citrine provides an easy API to define which endpoints you want protected, freely allowed or completely denied.
+It currently offers suppport for OpenID Connect, simple JWT validation, or a custom authentication method, 
+with other options comming in the future.
 With the current API, it provides the flexibility of choosing different authentication methods 
 for any request or just assigning a default behaviour for all.
 
-```rust
+##### Configuration as an OpenID Connect resource server
+
+For this example we use Keycloak as an authorization server
+
+```rust 
+fn main() -> Result<(), ServerError> {
+    Application::<Context>::builder()
+        ...
+        .security_configuration(
+            SecurityConfiguration::new()
+                // We protect writes in the /api subdomain but allow reads
+                .add_rule(
+                    MethodMatcher::Multiple(vec![Method::POST, Method::PUT, Method::DELETE]),
+                    "/api/*",
+                    SecurityAction::Authenticate(Authenticator::OIDC(OIDCConfiguration::new(
+                        HashSet::from([Uri::from_static("http://{keycloak_host}/realms/{your_realm}")]),
+                        Uri::from_static("http://{keycloak_host}/realms/{your_realm}/protocol/openid-connect/certs"),
+                        HashSet::from(["{your_audience}".to_string()]),
+                    ).await)),
+                )
+                // Any other request is allowed. This is the default behaviour if this line is
+                // removed, but adding it makes it more explicit what you want to do with with
+                // the requests that do not match the rules above
+                .add_rule(MethodMatcher::All, "/*", SecurityAction::Allow),
+        )
+        .start()
+        .await
+}
+```
+
+
+##### Configuration with simple JWT validation
+```rust 
 fn main() -> Result<(), ServerError> {
     Application::<Context>::builder()
         ...
@@ -190,7 +223,7 @@ fn main() -> Result<(), ServerError> {
                     MethodMatcher::Multiple(vec![Method::POST, Method::PUT, Method::DELETE]),
                     "/api/*",
                     SecurityAction::Authenticate(Authenticator::JWT(JWTConfiguration::new(
-                        JWTSecret::base64_encoded(jwt_secret),
+                        JWTSecret::base64_encoded(jwt_secret), 
                         Algorithm::HS256
                     ))),
                 )

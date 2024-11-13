@@ -1,15 +1,14 @@
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display};
 
-use base64::Engine;
 use hyper::header::{HeaderValue, AUTHORIZATION};
-use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use log::debug;
-use serde::{Deserialize, Serialize};
 
 use crate::{
     request::RequestMetadata,
     request_matcher::{MethodMatcher, RequestMatcher},
 };
+
+use super::{oidc::OIDCConfiguration, simple_jwt::JWTConfiguration};
 
 pub struct SecurityConfiguration {
     rules: Vec<SecurityRule>,
@@ -37,7 +36,10 @@ impl SecurityConfiguration {
         debug!("Authorizing request {} {}", request.method, request.uri);
         for rule in self.rules.iter() {
             if rule.matches(request) {
-                debug!("Found matching rule: {} | {}", rule.request_matcher, rule.action);
+                debug!(
+                    "Found matching rule: {} | {}",
+                    rule.request_matcher, rule.action
+                );
                 return rule.get_auth_result(request);
             }
         }
@@ -101,7 +103,27 @@ impl Display for SecurityAction {
     }
 }
 
+pub type AuthClaims = HashMap<String, serde_json::Value>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AuthResult {
+    Denied,
+    Allowed,
+    Authenticated(AuthClaims),
+    CustomAuthenticated(String),
+}
+
+impl AuthResult {
+    pub fn get_claims(&self) -> Option<&AuthClaims> {
+        match self {
+            AuthResult::Authenticated(claims) => Some(claims),
+            _ => None,
+        }
+    }
+}
+
 pub enum Authenticator {
+    OIDC(OIDCConfiguration),
     //todo add SAML
     JWT(JWTConfiguration),
     // This will receive a function that has the Authorization header as a param and returns
@@ -124,6 +146,7 @@ impl Authenticator {
 
         match self {
             Authenticator::JWT(config) => config.authenticate(authorization_header_str.unwrap()),
+            Authenticator::OIDC(config) => config.authenticate(authorization_header_str.unwrap()),
             Authenticator::Custom(custom_auth_function) => {
                 custom_auth_function(authorization_header.unwrap())
             }
@@ -135,100 +158,8 @@ impl Display for Authenticator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::JWT(_) => write!(f, "JWT"),
+            Self::OIDC(_) => write!(f, "OIDC"),
             Self::Custom(_) => write!(f, "Custom"),
-        }
-    }
-}
-
-pub enum JWTSecret {
-    Plain(String),
-    Base64(String)
-}
-
-impl JWTSecret {
-    pub fn plain(secret: &str) -> Self {
-        Self::Plain(secret.to_string())
-    }
-
-    pub fn base64_encoded(secret: &str) -> Self {
-        Self::Base64(secret.to_string())
-    }
-}
-
-pub struct JWTConfiguration {
-    secret: String,
-    algorithm: Algorithm,
-}
-
-impl JWTConfiguration {
-    pub fn new(secret: JWTSecret, algorithm: Algorithm) -> Self {
-        let secret = match secret {
-            JWTSecret::Plain(plain) => plain,
-            JWTSecret::Base64(base64_encoded) => {
-                let bytes_res = base64::prelude::BASE64_STANDARD.decode(base64_encoded);
-                if let Err(e) = bytes_res {
-                    panic!("Invalid Base64 JWT Secret {}", e);
-                }
-                let string_res = String::from_utf8(bytes_res.unwrap());
-                if let Err(e) = string_res {
-                    panic!("Invalid Base64 JWT Secret {}", e);
-                }
-                string_res.unwrap()
-            }
-        };
-
-        JWTConfiguration {
-            secret,
-            algorithm,
-        }
-    }
-
-    fn authenticate(&self, token: &str) -> AuthResult {
-        debug!("Using JWT Authenticator");
-        let validation = Validation::new(self.algorithm);
-        let split_token = token.split(" ");
-        let token = split_token.last().unwrap_or("");
-
-        let token_data = jsonwebtoken::decode::<AuthClaims>(
-            token,
-            &DecodingKey::from_secret(self.secret.as_ref()),
-            &validation,
-        );
-
-        if token_data.is_err() {
-            debug!("Error getting token data {:?}", token_data.err());
-            AuthResult::Denied
-        } else {
-            debug!("Request allowed");
-            AuthResult::JWTAuthenticated(token_data.unwrap().claims)
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct AuthClaims {
-    pub sub: Option<String>,
-    pub name: Option<String>,
-    pub iat: Option<usize>,
-    pub admin: Option<bool>,
-    pub exp: Option<usize>,
-    pub iss: Option<String>,
-    pub nbf: Option<usize>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum AuthResult {
-    Denied,
-    Allowed,
-    JWTAuthenticated(AuthClaims),
-    CustomAuthenticated(String),
-}
-
-impl AuthResult {
-    pub fn get_claims(&self) -> Option<&AuthClaims> {
-        match self {
-            AuthResult::JWTAuthenticated(claims) => Some(claims),
-            _ => None,
         }
     }
 }

@@ -2,7 +2,16 @@ use log::info;
 use tera::Tera;
 
 use crate::{
-    configuration, error::ServerError, middleware::RequestMiddleware, request::Request, response::Response, router::{InternalRouter, Router}, security::SecurityConfiguration, server::RequestPipelineConfiguration, static_file_server::StaticFileServer, templates
+    configuration,
+    error::ServerError,
+    middleware::RequestMiddleware,
+    request::Request,
+    response::Response,
+    router::{InternalRouter, Router},
+    security::security_configuration::SecurityConfiguration,
+    server::RequestPipelineConfiguration,
+    static_file_server::StaticFileServer,
+    templates,
 };
 
 pub struct Application<T: Send + Sync + 'static> {
@@ -95,7 +104,10 @@ where
         self
     }
 
-    pub fn response_interceptor(mut self, response_interceptor: fn(&Request, &Response)) -> ApplicationBuilder<T> {
+    pub fn response_interceptor(
+        mut self,
+        response_interceptor: fn(&Request, &Response),
+    ) -> ApplicationBuilder<T> {
         self.response_interceptor = response_interceptor;
         self
     }

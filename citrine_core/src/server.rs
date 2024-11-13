@@ -14,7 +14,7 @@ use crate::middleware::RequestMiddleware;
 use crate::request::{Request, RequestMetadata};
 use crate::response::Response;
 use crate::router::InternalRouter;
-use crate::security::{AuthResult, SecurityConfiguration};
+use crate::security::security_configuration::{AuthResult, SecurityConfiguration};
 use crate::static_file_server::StaticFileServer;
 
 pub struct RequestPipelineConfiguration<T: 'static + Send + Sync> {

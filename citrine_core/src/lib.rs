@@ -12,6 +12,7 @@ mod router;
 mod error;
 mod templates;
 mod configuration;
+mod util;
 pub mod security;
 pub mod middleware;
 pub mod request;

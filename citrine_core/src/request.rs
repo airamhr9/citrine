@@ -10,7 +10,7 @@ use validator::Validate;
 
 use crate::{
     error::{DeserializationError, ErrorType, RequestError},
-    security::AuthResult,
+    security::security_configuration::AuthResult,
 };
 
 pub struct RequestMetadata {

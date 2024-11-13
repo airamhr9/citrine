@@ -9,9 +9,10 @@ use citrine_core::middleware::RequestMiddleware;
 use citrine_core::request::{ContentType, Request};
 use citrine_core::request_matcher::MethodMatcher;
 use citrine_core::response::Response;
-use citrine_core::security::{
-    Authenticator, JWTConfiguration, JWTSecret, SecurityAction, SecurityConfiguration,
+use citrine_core::security::security_configuration::{
+    Authenticator, SecurityAction, SecurityConfiguration,
 };
+use citrine_core::security::simple_jwt::{JWTSecret, JWTConfiguration};
 use citrine_core::static_file_server::StaticFileServer;
 use citrine_core::{
     self, tera, tokio, Accepts, DefaultErrorResponseBody, Method, RequestError, Router,
@@ -54,9 +55,9 @@ async fn main() -> Result<(), ServerError> {
         .response_interceptor(|request, response| {
             let user = if let Some(claims) = request.auth_result.get_claims() {
                 claims
-                    .name
-                    .clone()
-                    .unwrap_or("No user in token".to_string())
+                    .get("name")
+                    .unwrap_or(&serde_json::Value::Null)
+                    .to_string()
             } else {
                 "Empty".to_string()
             };
@@ -90,7 +91,13 @@ async fn main() -> Result<(), ServerError> {
                     SecurityAction::Authenticate(Authenticator::JWT(JWTConfiguration::new(
                         JWTSecret::base64_encoded(jwt_secret),
                         Algorithm::HS256,
-                    ))),
+                    )))
+                    // Sample OIDC configuration with a locally deployed Keycloak
+                    //SecurityAction::Authenticate(Authenticator::OIDC(OIDCConfiguration::new(
+                    //    HashSet::from([Uri::from_static("http://localhost:9000/realms/test_realm")]),
+                    //    Uri::from_static("http://localhost:9000/realms/test_realm/protocol/openid-connect/certs"),
+                    //    HashSet::from(["account".to_string()]),
+                    //).await)),
                 )
                 // Any other request is allowed. This is the default behaviour if this line is
                 // removed, but adding it makes it more explicit what you want to do with with
@@ -323,7 +330,7 @@ fn delete_by_id_controller(context: Arc<Context>, req: Request) -> Response {
 }
 
 fn create_user_controler(context: Arc<Context>, req: Request) -> Response {
-    let read_body_res: Result<CreateUser, RequestError> =req.get_body_validated();
+    let read_body_res: Result<CreateUser, RequestError> = req.get_body_validated();
     if let Err(e) = read_body_res {
         return e.into();
     }
