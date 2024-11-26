@@ -14,10 +14,7 @@ use citrine_core::security::security_configuration::{
 };
 use citrine_core::security::simple_jwt::{JWTConfiguration, JWTSecret};
 use citrine_core::static_file_server::StaticFileServer;
-use citrine_core::{
-    self, tera, tokio, Accepts, DefaultErrorResponseBody, Method, RequestError, Router,
-    ServerError, StatusCode,
-};
+use citrine_core::{self, tera, tokio, Accepts, Method, Router, ServerError, StatusCode};
 use mock_data::get_mock_users;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params, OptionalExtension};
@@ -101,7 +98,7 @@ async fn main() -> Result<(), ServerError> {
                                 Algorithm::HS256,
                             ),
                         ))),
-                ) 
+                )
                 // Example configuration for a locally deployed keycloak
                 //.add_rule(SecurityRule::new()
                 //        .add_matcher(
@@ -120,7 +117,8 @@ async fn main() -> Result<(), ServerError> {
                     SecurityRule::new()
                         .add_matcher(MethodMatcher::All, "/*")
                         .execute_action(SecurityAction::Allow),
-                ))
+                ),
+        )
         // Any other request is allowed. This is the default behaviour if this line is
         // removed, but adding it makes it more explicit what you want to do with with
         // the requests that do not match the rules above
@@ -234,6 +232,8 @@ struct SampleError {
     cause: Option<Box<dyn std::error::Error>>,
 }
 
+impl std::error::Error for SampleError {}
+
 impl SampleError {
     fn new<E>(message: &str, cause: E) -> Self
     where
@@ -266,16 +266,10 @@ impl Display for SampleError {
  * */
 
 fn base_path_controller(context: Arc<Context>, _: Request) -> Response {
-    let mut db = context.get_db_connection();
-    let users_res = find_all_users(&mut db);
-    if users_res.is_err() {
-        return Response::template("error.html", &json!({})).unwrap();
+    match find_all_users(&mut context.get_db_connection()) {
+        Ok(users) => Response::template("index.html", &UserListResponse { users }).unwrap(),
+        Err(_) => Response::template("error.html", &json!({})).unwrap(),
     }
-    let users = UserListResponse {
-        users: users_res.unwrap(),
-    };
-
-    Response::template("index.html", &users).unwrap()
 }
 
 /*
@@ -303,33 +297,23 @@ fn user_router() -> Router<Context> {
  * */
 
 fn find_all_users_controller(context: Arc<Context>, _: Request) -> Response {
-    let mut db = context.get_db_connection();
-
-    let users_res = find_all_users(&mut db);
-    if let Err(e) = users_res {
-        return Response::new(StatusCode::INTERNAL_SERVER_ERROR).json(
-            DefaultErrorResponseBody::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
-        );
+    match find_all_users(&mut context.get_db_connection()) {
+        Ok(users) => Response::new(StatusCode::OK).json(users),
+        Err(e) => Response::default_error(&e),
     }
-
-    Response::new(StatusCode::OK).json(users_res.unwrap())
 }
 
 fn find_by_id_controller(context: Arc<Context>, req: Request) -> Response {
     let path_variables = req.path_variables;
     let id = path_variables.get("id").unwrap();
 
-    let user_res = find_by_id(id, &mut context.get_db_connection());
-    if let Err(e) = user_res {
-        return Response::new(StatusCode::INTERNAL_SERVER_ERROR).json(
-            DefaultErrorResponseBody::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
-        );
-    }
-    let opt_user = user_res.unwrap();
-    if let Some(user) = opt_user {
-        Response::new(StatusCode::OK).json(user)
-    } else {
-        Response::new(StatusCode::NOT_FOUND)
+    match find_by_id(id, &mut context.get_db_connection()) {
+        Ok(opt_user) => match opt_user {
+            Some(user) => Response::new(StatusCode::OK).json(user),
+            None => Response::new(StatusCode::NOT_FOUND),
+        },
+
+        Err(e) => Response::default_error(&e),
     }
 }
 
@@ -337,55 +321,37 @@ fn delete_by_id_controller(context: Arc<Context>, req: Request) -> Response {
     let path_variables = req.path_variables;
     let id = path_variables.get("id").unwrap();
 
-    let mut db = context.db.get().unwrap();
-
-    if let Err(e) = delete(id, &mut db) {
-        Response::new(StatusCode::NO_CONTENT).json(DefaultErrorResponseBody::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            e.to_string(),
-        ))
-    } else {
-        Response::new(StatusCode::NO_CONTENT)
+    match delete(id, &mut context.get_db_connection()) {
+        Ok(_) => Response::new(StatusCode::NO_CONTENT),
+        Err(e) => Response::default_error(&e),
     }
 }
 
 fn create_user_controler(context: Arc<Context>, req: Request) -> Response {
-    let read_body_res: Result<CreateUser, RequestError> = req.get_body_validated();
-    if let Err(e) = read_body_res {
-        return e.into();
-    }
-
-    let user = read_body_res.unwrap();
-    let mut db = context.db.get().unwrap();
-
-    if let Err(e) = create(user.into(), &mut db) {
-        Response::new(StatusCode::INTERNAL_SERVER_ERROR).json(DefaultErrorResponseBody::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            e.to_string(),
-        ))
-    } else {
-        Response::new(StatusCode::NO_CONTENT)
+    match req.get_body_validated::<CreateUser>() {
+        Ok(create_user_request) => {
+            match create(create_user_request.into(), &mut context.get_db_connection()) {
+                Ok(_) => Response::new(StatusCode::NO_CONTENT),
+                Err(e) => Response::default_error(&e),
+            }
+        }
+        Err(e) => e.into(),
     }
 }
 
 fn update_user_controler(context: Arc<Context>, req: Request) -> Response {
-    let read_body_res: Result<UpdateUser, RequestError> = req.get_body_validated();
-    if let Err(e) = read_body_res {
-        return e.into();
-    }
-
-    let user = read_body_res.unwrap();
-    let id = req.path_variables.get("id").unwrap();
-
-    let mut db = context.db.get().unwrap();
-
-    if let Err(e) = update(id, user, &mut db) {
-        Response::new(StatusCode::INTERNAL_SERVER_ERROR).json(DefaultErrorResponseBody::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            e.to_string(),
-        ))
-    } else {
-        Response::new(StatusCode::NO_CONTENT)
+    match req.get_body_validated::<UpdateUser>() {
+        Ok(update_user_request) => {
+            match update(
+                req.path_variables.get("id").unwrap(),
+                update_user_request,
+                &mut context.get_db_connection(),
+            ) {
+                Ok(_) => Response::new(StatusCode::NO_CONTENT),
+                Err(e) => Response::default_error(&e),
+            }
+        }
+        Err(e) => e.into(),
     }
 }
 

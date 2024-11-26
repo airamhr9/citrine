@@ -142,16 +142,10 @@ fn main() -> Result<(), ServerError> {
 
 // This is the handler for the / path. In this case we are going to return an HTML template
 fn base_path_controller(context: Arc<Context>, _: Request) -> Response {
-    let mut db = context.get_db_connection();
-    let users_res = find_all_users(&mut db);
-    if users_res.is_err() {
-        return Response::template("error.html", &json!({})).unwrap();
+    match find_all_users(&mut context.get_db_connection()) {
+        Ok(users) => Response::template("index.html", &UserListResponse { users }).unwrap(),
+        Err(_) => Response::template("error.html", &json!({})).unwrap(),
     }
-    let users = UserListResponse {
-        users: users_res.unwrap(),
-    };
-
-    Response::template("index.html", &users).unwrap()
 }
 
 
@@ -265,20 +259,32 @@ to work, the request body struct must derive Validate.
 
 // Create user handler
 fn create_user_controler(context: Arc<Context>, req: Request) -> Response {
-    let read_body_res: Result<CreateUser, RequestError> = req.get_body_validated();
-    if let Err(e) = read_body_res {
-        return e.to_response();
+    match req.get_body_validated::<CreateUser>() {
+        Ok(create_user_request) => {
+            match create(create_user_request.into(), &mut context.get_db_connection()) {
+                Ok(_) => Response::new(StatusCode::NO_CONTENT),
+                Err(e) => Response::default_error(&e),
+            }
+        }
+        Err(e) => e.into(),
     }
-    ...
 }
 
 // Update user handler
 fn update_user_controler(context: Arc<Context>, req: Request) -> Response {
-    let read_body_res: Result<UpdateUser, RequestError> = req.get_body_validated();
-    if let Err(e) = read_body_res {
-        return e.to_response();
+    match req.get_body_validated::<UpdateUser>() {
+        Ok(update_user_request) => {
+            match update(
+                req.path_variables.get("id").unwrap(),
+                update_user_request,
+                &mut context.get_db_connection(),
+            ) {
+                Ok(_) => Response::new(StatusCode::NO_CONTENT),
+                Err(e) => Response::default_error(&e),
+            }
+        }
+        Err(e) => e.into(),
     }
-    ...
 }
 ```
 

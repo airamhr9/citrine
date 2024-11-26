@@ -4,7 +4,7 @@ use hyper::{body::Bytes, HeaderMap, StatusCode};
 use serde::Serialize;
 use tera::Context;
 
-use crate::templates;
+use crate::{templates, DefaultErrorResponseBody};
 
 pub struct Response {
     pub status: StatusCode,
@@ -81,6 +81,14 @@ impl Response {
         );
 
         self
+    }
+
+    pub fn default_error(e: &dyn std::error::Error) -> Self {
+        Response::new(StatusCode::NO_CONTENT).json(DefaultErrorResponseBody::new(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                e.to_string(),
+        ))
+
     }
 
     pub fn body(mut self, body: String) -> Self {
