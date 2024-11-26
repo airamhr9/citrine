@@ -10,9 +10,9 @@ use citrine_core::request::{ContentType, Request};
 use citrine_core::request_matcher::MethodMatcher;
 use citrine_core::response::Response;
 use citrine_core::security::security_configuration::{
-    Authenticator, SecurityAction, SecurityConfiguration,
+    Authenticator, SecurityAction, SecurityConfiguration, SecurityRule,
 };
-use citrine_core::security::simple_jwt::{JWTSecret, JWTConfiguration};
+use citrine_core::security::simple_jwt::{JWTConfiguration, JWTSecret};
 use citrine_core::static_file_server::StaticFileServer;
 use citrine_core::{
     self, tera, tokio, Accepts, DefaultErrorResponseBody, Method, RequestError, Router,
@@ -86,24 +86,44 @@ async fn main() -> Result<(), ServerError> {
             SecurityConfiguration::new()
                 // We protect writes in the /api subdomain but allow reads
                 .add_rule(
-                    MethodMatcher::Multiple(vec![Method::POST, Method::PUT, Method::DELETE]),
-                    "/api/*",
-                    SecurityAction::Authenticate(Authenticator::JWT(JWTConfiguration::new(
-                        JWTSecret::base64_encoded(jwt_secret),
-                        Algorithm::HS256,
-                    )))
-                    // Sample OIDC configuration with a locally deployed Keycloak
-                    //SecurityAction::Authenticate(Authenticator::OIDC(OIDCConfiguration::new(
-                    //    HashSet::from([Uri::from_static("http://localhost:9000/realms/test_realm")]),
-                    //    Uri::from_static("http://localhost:9000/realms/test_realm/protocol/openid-connect/certs"),
-                    //    HashSet::from(["account".to_string()]),
-                    //).await)),
-                )
-                // Any other request is allowed. This is the default behaviour if this line is
-                // removed, but adding it makes it more explicit what you want to do with with
-                // the requests that do not match the rules above
-                .add_rule(MethodMatcher::All, "/*", SecurityAction::Allow),
-        )
+                    SecurityRule::new()
+                        .matching_requests(
+                            MethodMatcher::Multiple(vec![
+                                Method::POST,
+                                Method::PUT,
+                                Method::DELETE,
+                            ]),
+                            "/api/*",
+                        )
+                        .execute_action(SecurityAction::Authenticate(Authenticator::JWT(
+                            JWTConfiguration::new(
+                                JWTSecret::base64_encoded(jwt_secret),
+                                Algorithm::HS256,
+                            ),
+                        ))),
+                ) 
+                // Example configuration for a locally deployed keycloak
+                //.add_rule(SecurityRule::new()
+                //        .matching_requests(
+                //            MethodMatcher::Multiple(vec![
+                //                Method::POST,
+                //                Method::PUT,
+                //                Method::DELETE,
+                //            ]),
+                //            "/api/*",
+                //        ).execute_action(SecurityAction::Authenticate(Authenticator::OIDC(OIDCConfiguration::new(
+                //                    HashSet::from([Uri::from_static("http://localhost:9000/realms/test_realm")]),
+                //                    Uri::from_static("http://localhost:9000/realms/test_realm/protocol/openid-connect/certs"),
+                //                    HashSet::from(["account".to_string()])).await)
+                //)))
+                .add_rule(
+                    SecurityRule::new()
+                        .matching_requests(MethodMatcher::All, "/*")
+                        .execute_action(SecurityAction::Allow),
+                ))
+        // Any other request is allowed. This is the default behaviour if this line is
+        // removed, but adding it makes it more explicit what you want to do with with
+        // the requests that do not match the rules above
         .router(
             Router::new()
                 .get("", base_path_controller)

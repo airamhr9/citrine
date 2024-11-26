@@ -21,14 +21,9 @@ impl SecurityConfiguration {
 
     pub fn add_rule(
         mut self,
-        method_matcher: MethodMatcher,
-        path_regex: &str,
-        action: SecurityAction,
+        rule: SecurityRule
     ) -> Self {
-        self.rules.push(SecurityRule::new(
-            RequestMatcher::new(path_regex, method_matcher),
-            action,
-        ));
+        self.rules.push(rule);
         self
     }
 
@@ -36,10 +31,6 @@ impl SecurityConfiguration {
         debug!("Authorizing request {} {}", request.method, request.uri);
         for rule in self.rules.iter() {
             if rule.matches(request) {
-                debug!(
-                    "Found matching rule: {} | {}",
-                    rule.request_matcher, rule.action
-                );
                 return rule.get_auth_result(request);
             }
         }
@@ -55,21 +46,48 @@ impl Default for SecurityConfiguration {
     }
 }
 
-struct SecurityRule {
-    request_matcher: RequestMatcher,
+pub struct SecurityRule {
+    request_matchers: Vec<RequestMatcher>,
     action: SecurityAction,
 }
 
-impl SecurityRule {
-    pub fn new(request_matcher: RequestMatcher, action: SecurityAction) -> Self {
+impl Default for SecurityRule {
+    fn default() -> Self {
         SecurityRule {
-            request_matcher,
-            action,
+            request_matchers: vec![],
+            action: SecurityAction::Allow,
         }
     }
+}
+
+impl SecurityRule {
+    pub fn new() -> Self {
+        SecurityRule::default()
+    }
+
+    pub fn matching_requests(mut self, method_matcher: MethodMatcher, path_regex: &str) -> Self {
+        self.request_matchers
+            .push(RequestMatcher::new(path_regex, method_matcher));
+        self
+    }
+
+    pub fn execute_action(mut self, action: SecurityAction) -> Self {
+        self.action = action;
+        self
+    }
+
 
     pub fn matches(&self, request: &RequestMetadata) -> bool {
-        self.request_matcher.matches(&request.method, &request.uri)
+        for request_matcher in self.request_matchers.iter() {
+            if request_matcher.matches(&request.method, &request.uri) {
+                debug!(
+                    "Found matching rule with matcher: {} | {}",
+                    request_matcher, self.action
+                );
+                return true;
+            }
+        }
+        false
     }
 
     pub fn get_auth_result(&self, request: &RequestMetadata) -> AuthResult {

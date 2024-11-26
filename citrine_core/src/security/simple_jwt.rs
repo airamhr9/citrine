@@ -21,6 +21,7 @@ impl JWTSecret {
     }
 }
 
+#[derive(Debug)]
 pub struct JWTConfiguration {
     secret: String,
     algorithm: Algorithm,

@@ -178,7 +178,8 @@ Citrine provides an easy API to define which endpoints you want protected, freel
 It currently offers suppport for OpenID Connect, simple JWT validation, or a custom authentication method, 
 with other options comming in the future.
 With the current API, it provides the flexibility of choosing different authentication methods 
-for any request or just assigning a default behaviour for all.
+for any request or just assigning a default behaviour for all. You can add multiple request matchers
+to a single SecurityRule by calling the matching_requests method multiple times.
 
 ##### Configuration as an OpenID Connect resource server
 
@@ -191,15 +192,19 @@ fn main() -> Result<(), ServerError> {
         .security_configuration(
             SecurityConfiguration::new()
                 // We protect writes in the /api subdomain but allow reads
-                .add_rule(
-                    MethodMatcher::Multiple(vec![Method::POST, Method::PUT, Method::DELETE]),
-                    "/api/*",
-                    SecurityAction::Authenticate(Authenticator::OIDC(OIDCConfiguration::new(
-                        HashSet::from([Uri::from_static("http://{keycloak_host}/realms/{your_realm}")]),
-                        Uri::from_static("http://{keycloak_host}/realms/{your_realm}/protocol/openid-connect/certs"),
-                        HashSet::from(["{your_audience}".to_string()]),
-                    ).await)),
-                )
+                .add_rule(SecurityRule::new()
+                        .matching_requests(
+                            MethodMatcher::Multiple(vec![
+                                Method::POST,
+                                Method::PUT,
+                                Method::DELETE,
+                            ]),
+                            "/api/*",
+                        ).execute_action(SecurityAction::Authenticate(Authenticator::OIDC(OIDCConfiguration::new(
+                                    HashSet::from([Uri::from_static("http://{keycloak_host}/realms/{your_realm}")]),
+                                    Uri::from_static("http://{keycloak_host}/realms/{your_realm}/protocol/openid-connect/certs"),
+                                    HashSet::from(["{your_audience}".to_string()])).await)
+                )))
                 // Any other request is allowed. This is the default behaviour if this line is
                 // removed, but adding it makes it more explicit what you want to do with with
                 // the requests that do not match the rules above
@@ -220,13 +225,22 @@ fn main() -> Result<(), ServerError> {
             SecurityConfiguration::new()
                 // We protect writes in the /api subdomain but allow reads
                 .add_rule(
-                    MethodMatcher::Multiple(vec![Method::POST, Method::PUT, Method::DELETE]),
-                    "/api/*",
-                    SecurityAction::Authenticate(Authenticator::JWT(JWTConfiguration::new(
-                        JWTSecret::base64_encoded(jwt_secret), 
-                        Algorithm::HS256
-                    ))),
-                )
+                    SecurityRule::new()
+                        .matching_requests(
+                            MethodMatcher::Multiple(vec![
+                                Method::POST,
+                                Method::PUT,
+                                Method::DELETE,
+                            ]),
+                            "/api/*",
+                        )
+                        .execute_action(SecurityAction::Authenticate(Authenticator::JWT(
+                            JWTConfiguration::new(
+                                JWTSecret::base64_encoded(jwt_secret),
+                                Algorithm::HS256,
+                            ),
+                        ))),
+                ) 
                 // Any other request is allowed. This is the default behaviour if this line is
                 // removed, but adding it makes it more explicit what you want to do with with
                 // the requests that do not match the rules above
