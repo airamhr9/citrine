@@ -87,7 +87,7 @@ async fn main() -> Result<(), ServerError> {
                 // We protect writes in the /api subdomain but allow reads
                 .add_rule(
                     SecurityRule::new()
-                        .matching_requests(
+                        .add_matcher(
                             MethodMatcher::Multiple(vec![
                                 Method::POST,
                                 Method::PUT,
@@ -104,7 +104,7 @@ async fn main() -> Result<(), ServerError> {
                 ) 
                 // Example configuration for a locally deployed keycloak
                 //.add_rule(SecurityRule::new()
-                //        .matching_requests(
+                //        .add_matcher(
                 //            MethodMatcher::Multiple(vec![
                 //                Method::POST,
                 //                Method::PUT,
@@ -118,7 +118,7 @@ async fn main() -> Result<(), ServerError> {
                 //)))
                 .add_rule(
                     SecurityRule::new()
-                        .matching_requests(MethodMatcher::All, "/*")
+                        .add_matcher(MethodMatcher::All, "/*")
                         .execute_action(SecurityAction::Allow),
                 ))
         // Any other request is allowed. This is the default behaviour if this line is

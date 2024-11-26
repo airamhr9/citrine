@@ -65,7 +65,7 @@ impl SecurityRule {
         SecurityRule::default()
     }
 
-    pub fn matching_requests(mut self, method_matcher: MethodMatcher, path_regex: &str) -> Self {
+    pub fn add_matcher(mut self, method_matcher: MethodMatcher, path_regex: &str) -> Self {
         self.request_matchers
             .push(RequestMatcher::new(path_regex, method_matcher));
         self
