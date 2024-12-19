@@ -84,7 +84,7 @@ impl Response {
     }
 
     pub fn default_error(e: &dyn std::error::Error) -> Self {
-        Response::new(StatusCode::NO_CONTENT).json(DefaultErrorResponseBody::new(
+        Response::new(StatusCode::INTERNAL_SERVER_ERROR).json(DefaultErrorResponseBody::new(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 e.to_string(),
         ))
