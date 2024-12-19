@@ -275,7 +275,7 @@ fn update_user_controler(context: Arc<Context>, req: Request) -> Response {
     match req.get_body_validated::<UpdateUser>() {
         Ok(update_user_request) => {
             match update(
-                req.path_variables.get("id").unwrap(),
+                req.get_path_variables().get("id").unwrap(),
                 update_user_request,
                 &mut context.get_db_connection(),
             ) {

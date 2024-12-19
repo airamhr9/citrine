@@ -36,7 +36,7 @@ pub struct Request {
     pub method: Method,
     pub uri: Uri,
     body: Option<String>,
-    pub path_variables: HashMap<String, String>,
+    path_variables: HashMap<String, String>,
     pub headers: HeaderMap,
     pub auth_result: AuthResult,
     content_type: Option<ContentType>,
@@ -89,6 +89,10 @@ impl Request {
 
     pub fn set_path_variables(&mut self, path_variables: HashMap<String, String>) {
         self.path_variables = path_variables;
+    }
+
+    pub fn get_path_variables(&self ) -> &HashMap<String, String> {
+        &self.path_variables
     }
 
     pub fn set_content_type(&mut self, content_type: ContentType) {

@@ -304,7 +304,7 @@ fn find_all_users_controller(context: Arc<Context>, _: Request) -> Response {
 }
 
 fn find_by_id_controller(context: Arc<Context>, req: Request) -> Response {
-    let path_variables = req.path_variables;
+    let path_variables = req.get_path_variables();
     let id = path_variables.get("id").unwrap();
 
     match find_by_id(id, &mut context.get_db_connection()) {
@@ -318,7 +318,7 @@ fn find_by_id_controller(context: Arc<Context>, req: Request) -> Response {
 }
 
 fn delete_by_id_controller(context: Arc<Context>, req: Request) -> Response {
-    let path_variables = req.path_variables;
+    let path_variables = req.get_path_variables();
     let id = path_variables.get("id").unwrap();
 
     match delete(id, &mut context.get_db_connection()) {
@@ -343,7 +343,7 @@ fn update_user_controler(context: Arc<Context>, req: Request) -> Response {
     match req.get_body_validated::<UpdateUser>() {
         Ok(update_user_request) => {
             match update(
-                req.path_variables.get("id").unwrap(),
+                req.get_path_variables().get("id").unwrap(),
                 update_user_request,
                 &mut context.get_db_connection(),
             ) {
